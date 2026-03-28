@@ -1,0 +1,17 @@
+.DS_Store
+node_modules
+/build
+/.svelte-kit
+/package
+.env
+.env.*
+!.env.example
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Claude Code
+.claude/settings.local.json
+.claude/agent-memory-local/
+
+# Rust
+src-tauri/target/

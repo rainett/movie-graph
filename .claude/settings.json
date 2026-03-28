@@ -1,0 +1,64 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Bash(npm run *)",
+      "Bash(npm install *)",
+      "Bash(npm test *)",
+      "Bash(npx *)",
+      "Bash(cargo build *)",
+      "Bash(cargo run *)",
+      "Bash(cargo test *)",
+      "Bash(cargo check *)",
+      "Bash(cargo clippy *)",
+      "Bash(cargo fmt *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git branch *)",
+      "Bash(git show *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(mkdir *)",
+      "Bash(echo *)",
+      "Bash(cd *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force *)",
+      "Bash(git reset --hard *)",
+      "Bash(git clean -fd *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "file=$(cat | jq -r '.tool_input.file_path // empty'); if [ -n \"$file\" ] && echo \"$file\" | grep -qE '\\.rs$'; then cd /c/Users/PavloKoval1/IdeaProjects/movie-graph/src-tauri && cargo check 2>&1 | head -30; fi",
+            "timeout": 120000,
+            "if": "Write(*.rs)|Edit(*.rs)"
+          },
+          {
+            "type": "command",
+            "command": "file=$(cat | jq -r '.tool_input.file_path // empty'); if [ -n \"$file\" ] && echo \"$file\" | grep -qE '\\.(ts|svelte)$'; then cd /c/Users/PavloKoval1/IdeaProjects/movie-graph && npm run check 2>&1 | tail -10; fi",
+            "timeout": 60000,
+            "if": "Write(*.ts)|Write(*.svelte)|Edit(*.ts)|Edit(*.svelte)"
+          }
+        ]
+      }
+    ],
+    "PostToolUse:Edit(CLAUDE.md)": [
+      {
+        "type": "command",
+        "command": "echo '\\n📋 CLAUDE.md updated. Consider:\\n   • git add CLAUDE.md && git commit -m \"docs: update project state\"\\n   • Run /milestone-status to verify completeness\\n'"
+      }
+    ]
+  }
+}

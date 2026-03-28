@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+:root {
+  /* Colors - Background */
+  --color-board-bg: #1a1a1e;
+  --color-device-body: #2d2d32;
+  --color-device-bezel: #232328;
+  --color-screen-bg: #0f1218;
+
+  /* Colors - Text */
+  --color-text-primary: #e8e6e3;
+  --color-text-secondary: #9a9590;
+  --color-text-disabled: #5c5955;
+  --color-text-screen: #c4e0c4;
+
+  /* Colors - Accent */
+  --color-accent-primary: #e07850;
+  --color-accent-secondary: #50a8e0;
+  --color-success: #50c070;
+  --color-warning: #e0a850;
+  --color-error: #e05050;
+
+  /* Colors - LED */
+  --color-led-off: #3a3530;
+  --color-led-red: #ff3030;
+  --color-led-green: #30ff50;
+  --color-led-amber: #ffaa30;
+  --color-led-blue: #3080ff;
+
+  /* Typography */
+  --font-ui: 'Orbitron', 'Microgramma', 'Roboto', sans-serif;
+  --font-mono: 'Share Tech Mono', 'IBM Plex Mono', monospace;
+
+  /* Shadows */
+  --shadow-device: 0 8px 24px rgba(0, 0, 0, 0.4);
+
+  /* Animation */
+  --ease-mechanical: cubic-bezier(0.2, 0, 0.2, 1);
+  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 100ms;
+  --duration-normal: 200ms;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--color-board-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+}
