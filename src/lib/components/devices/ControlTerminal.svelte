@@ -1,12 +1,56 @@
 <script lang="ts">
   import { searchMovies, getMovieDetails, getPersonDetails } from '$lib/services/tauri';
-  import type { MovieResult, MovieDetails, PersonDetails, MovieCredit } from '$lib/types/tmdb';
+  import type { MovieResult, MovieDetails, PersonDetails, MovieCredit, CastMember } from '$lib/types/tmdb';
   import { tmdbImage, releaseYear } from '$lib/types/tmdb';
+  import { untrack } from 'svelte';
   import { selectionStore } from '$lib/stores/selection';
   import { graphStore } from '$lib/stores/graph';
+  import type { MovieNode, ActorNode } from '$lib/types/node';
+  import type { Edge } from '$lib/types/edge';
 
   type Mode = 'search' | 'inspect' | 'filter';
   let activeMode: Mode = $state('search');
+
+  // ── Helpers ───────────────────────────────────────────────────
+  function movieDetailsToNode(details: MovieDetails): MovieNode {
+    return {
+      id: `m:${details.id}`,
+      tmdb_id: details.id,
+      title: details.title,
+      year: parseInt(releaseYear(details.release_date) || '0'),
+      status: 'none',
+      my_rating: null,
+      poster: tmdbImage(details.poster_path, 'w200') ?? '',
+      poster_options: [],
+      notes: '',
+      position: { x: (Math.random() - 0.5) * 600, y: (Math.random() - 0.5) * 400 },
+      added_at: new Date().toISOString(),
+    };
+  }
+
+  function castMemberToActorNode(member: CastMember): ActorNode {
+    return {
+      id: `a:${member.id}`,
+      tmdb_id: member.id,
+      name: member.name,
+      photo: tmdbImage(member.profile_path, 'w200') ?? '',
+      photo_options: [],
+      notes: '',
+      position: { x: (Math.random() - 0.5) * 600, y: (Math.random() - 0.5) * 400 },
+      added_at: new Date().toISOString(),
+    };
+  }
+
+  function makeEdge(from: string, to: string): Edge {
+    return {
+      id: `e:${from}-${to}`,
+      from,
+      to,
+      relationship: 'acted_in',
+      note: null,
+      created_at: new Date().toISOString(),
+    };
+  }
 
   // ── Search state ──────────────────────────────────────────────
   let query = $state('');
@@ -85,7 +129,11 @@
   // React to selection changes
   $effect(() => {
     const sel = $selectionStore;
-    if (sel && activeMode !== 'inspect') activeMode = 'inspect';
+    // Use untrack so activeMode is not a dependency — avoids the effect
+    // re-running (and forcing back to inspect) when the user clicks a mode tab
+    untrack(() => {
+      if (sel && activeMode !== 'inspect') activeMode = 'inspect';
+    });
     if (!sel) {
       inspectedMovie = null;
       inspectedPerson = null;
@@ -102,7 +150,6 @@
     inspectedPerson = null;
     actorSuggestions = [];
 
-    // Parse tmdb_id from node id ("m:123" or "a:123")
     const tmdbId = parseInt(id.slice(2));
     if (isNaN(tmdbId)) return;
 
@@ -127,6 +174,73 @@
       .filter((c) => !inGraph.has(`m:${c.id}`))
       .sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0))
       .slice(0, 5);
+  }
+
+  // ── Add / remove graph actions ─────────────────────────────────
+  function addMovieFromPreview() {
+    if (!preview) return;
+    const node = movieDetailsToNode(preview);
+    if ($graphStore.movies.has(node.id)) return;
+    graphStore.addMovie(node);
+    // Auto-create edges to actors already in graph that are in this cast
+    const castIds = new Set(preview.credits.cast.map((c) => `a:${c.id}`));
+    for (const actorId of $graphStore.actors.keys()) {
+      if (castIds.has(actorId)) graphStore.addEdge(makeEdge(node.id, actorId));
+    }
+  }
+
+  function addActorFromCast(member: CastMember) {
+    const node = castMemberToActorNode(member);
+    if ($graphStore.actors.has(node.id)) return;
+    graphStore.addActor(node);
+    if (inspectedMovie && $graphStore.movies.has(`m:${inspectedMovie.id}`)) {
+      graphStore.addEdge(makeEdge(`m:${inspectedMovie.id}`, node.id));
+    }
+  }
+
+  let addingSuggestion = $state<number | null>(null);
+  async function addSuggestedMovie(credit: MovieCredit) {
+    if (addingSuggestion !== null) return;
+    addingSuggestion = credit.id;
+    try {
+      let details: MovieDetails;
+      try {
+        details = await getMovieDetails(credit.id);
+      } catch {
+        details = {
+          id: credit.id,
+          title: credit.title,
+          release_date: credit.release_date,
+          overview: null,
+          poster_path: credit.poster_path,
+          runtime: null,
+          vote_average: credit.vote_average ?? 0,
+          genres: [],
+          credits: { cast: [] },
+        };
+      }
+      const node = movieDetailsToNode(details);
+      if ($graphStore.movies.has(node.id)) return;
+      graphStore.addMovie(node);
+      // Edge goes actor → movie (discovery direction: actor is parent, movie is child)
+      const sel = $selectionStore;
+      if (sel?.type === 'actor') graphStore.addEdge(makeEdge(sel.id, node.id));
+      if (inspectedPerson) actorSuggestions = buildSuggestions(inspectedPerson);
+    } finally {
+      addingSuggestion = null;
+    }
+  }
+
+  function deleteInspectedNode() {
+    const sel = $selectionStore;
+    if (!sel) return;
+    const edgesToRemove = Array.from($graphStore.edges.entries())
+      .filter(([, edge]) => edge.from === sel.id || edge.to === sel.id)
+      .map(([id]) => id);
+    for (const id of edgesToRemove) graphStore.removeEdge(id);
+    if (sel.type === 'movie') graphStore.removeMovie(sel.id);
+    else graphStore.removeActor(sel.id);
+    selectionStore.set(null);
   }
 </script>
 
@@ -238,7 +352,11 @@
                   </div>
                 </div>
               {/if}
-              <button class="add-btn">+ ADD TO GRAPH</button>
+              {#if $graphStore.movies.has(`m:${preview.id}`)}
+                <div class="already-in-graph">✓ ADDED TO GRAPH</div>
+              {:else}
+                <button class="add-btn" onclick={addMovieFromPreview}>+ ADD TO GRAPH</button>
+              {/if}
             {/if}
           </div>
         {:else if searchResults.length > 0}
@@ -256,6 +374,9 @@
                   <div class="result-title">{movie.title}</div>
                   <div class="result-meta">{releaseYear(movie.release_date)}{movie.vote_average > 0 ? ` · ★ ${movie.vote_average.toFixed(1)}` : ''}</div>
                 </div>
+                {#if $graphStore.movies.has(`m:${movie.id}`)}
+                  <span class="in-graph-badge">✓</span>
+                {/if}
               </button>
             {/each}
           </div>
@@ -307,22 +428,28 @@
           {#if inspectedMovie.credits.cast.length > 0}
             <div class="cast-section">
               <div class="section-label">CAST</div>
-              <div class="cast-list">
+              <div class="cast-rows">
                 {#each inspectedMovie.credits.cast.slice(0, 8) as member}
-                  <div class="cast-item">
-                    <div class="cast-photo">
+                  <div class="cast-row">
+                    <div class="cast-photo-sm">
                       {#if member.profile_path}
                         <img src={tmdbImage(member.profile_path, 'w200') ?? ''} alt={member.name} loading="lazy" />
                       {:else}
                         <div class="no-photo">?</div>
                       {/if}
                     </div>
-                    <div class="cast-name">{member.name}</div>
+                    <span class="cast-row-name">{member.name}</span>
+                    {#if $graphStore.actors.has(`a:${member.id}`)}
+                      <span class="in-graph-badge">✓</span>
+                    {:else}
+                      <button class="add-small-btn" onclick={() => addActorFromCast(member)}>+</button>
+                    {/if}
                   </div>
                 {/each}
               </div>
             </div>
           {/if}
+          <button class="remove-btn" onclick={deleteInspectedNode}>REMOVE FROM GRAPH</button>
 
         {:else if inspectedPerson}
           <!-- Actor inspect -->
@@ -368,12 +495,21 @@
                         {releaseYear(movie.release_date)}{movie.vote_average ? ` · ★ ${movie.vote_average.toFixed(1)}` : ''}
                       </div>
                     </div>
-                    <button class="add-small-btn" title="Add to graph">+</button>
+                    <button
+                      class="add-small-btn"
+                      class:in-graph={$graphStore.movies.has(`m:${movie.id}`)}
+                      disabled={addingSuggestion !== null || $graphStore.movies.has(`m:${movie.id}`)}
+                      onclick={() => addSuggestedMovie(movie)}
+                      title="Add to graph"
+                    >
+                      {addingSuggestion === movie.id ? '…' : ($graphStore.movies.has(`m:${movie.id}`) ? '✓' : '+')}
+                    </button>
                   </div>
                 {/each}
               </div>
             </div>
           {/if}
+          <button class="remove-btn" onclick={deleteInspectedNode}>REMOVE FROM GRAPH</button>
         {/if}
       </div>
 
@@ -773,7 +909,7 @@
   margin-bottom: 2px;
 }
 
-/* Cast row */
+/* Cast bubbles (search preview) */
 .cast-section {
   display: flex;
   flex-direction: column;
@@ -829,6 +965,50 @@
   width: 100%;
 }
 
+/* Cast rows (inspect mode) */
+.cast-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cast-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 4px;
+  border-radius: 2px;
+  transition: background var(--duration-fast);
+}
+
+.cast-row:hover { background: rgba(255, 255, 255, 0.03); }
+
+.cast-photo-sm {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #1a1a20;
+  flex-shrink: 0;
+}
+
+.cast-photo-sm img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cast-row-name {
+  flex: 1;
+  min-width: 0;
+  color: var(--color-text-screen);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Actor suggestions */
 .suggestions-section {
   display: flex;
@@ -874,6 +1054,33 @@
 
 .suggestion-info { flex: 1; min-width: 0; }
 
+/* In-graph badge & indicator */
+.in-graph-badge {
+  color: var(--color-led-green);
+  font-size: 12px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.already-in-graph {
+  color: var(--color-led-green);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  text-align: center;
+  padding: 8px;
+  margin-top: 4px;
+  border: 1px solid rgba(48, 255, 80, 0.2);
+  border-radius: 2px;
+  background: rgba(48, 255, 80, 0.05);
+}
+
+/* Add / remove buttons */
 .add-small-btn {
   width: 22px;
   height: 22px;
@@ -891,11 +1098,21 @@
   transition: background var(--duration-fast);
 }
 
-.add-small-btn:hover {
+.add-small-btn:hover:not(:disabled) {
   background: rgba(224, 120, 80, 0.25);
 }
 
-/* Add button */
+.add-small-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.add-small-btn.in-graph {
+  background: rgba(48, 255, 80, 0.08);
+  border-color: rgba(48, 255, 80, 0.25);
+  color: var(--color-led-green);
+}
+
 .add-btn {
   background: var(--color-accent-primary);
   border: none;
@@ -914,6 +1131,28 @@
 }
 
 .add-btn:hover { opacity: 0.85; }
+
+.remove-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 80, 80, 0.3);
+  border-radius: 2px;
+  color: rgba(255, 100, 100, 0.7);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  padding: 6px;
+  text-align: center;
+  width: 100%;
+  margin-top: 8px;
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+
+.remove-btn:hover {
+  background: rgba(255, 80, 80, 0.1);
+  color: #ff6060;
+}
 
 /* Shared */
 .placeholder-msg {

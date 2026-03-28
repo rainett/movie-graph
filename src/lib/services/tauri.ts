@@ -24,6 +24,10 @@ export async function validateProject(path: string): Promise<ValidationResult> {
   return tauriInvoke('validate_project', { path });
 }
 
+export async function pickFolder(): Promise<string | null> {
+  return tauriInvoke('pick_folder');
+}
+
 export async function saveMovies(projectPath: string, movies: MovieNode[]): Promise<void> {
   return tauriInvoke('save_movies', { projectPath, movies });
 }

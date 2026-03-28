@@ -6,6 +6,21 @@ use crate::models::project::{Manifest, Project, RecentProject, ValidationResult}
 use crate::services::file_io::FileService;
 
 #[tauri::command]
+pub async fn pick_folder(app: tauri::AppHandle) -> Result<Option<String>, Error> {
+    use tauri_plugin_dialog::DialogExt;
+    let folder = tokio::task::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .set_title("Select Project Folder")
+            .blocking_pick_folder()
+    })
+    .await
+    .map_err(|e| Error::Unknown(e.to_string()))?;
+
+    Ok(folder.map(|f| f.to_string()))
+}
+
+#[tauri::command]
 pub async fn create_project(path: PathBuf, name: String) -> Result<Project, Error> {
     if FileService::exists(&path.join("manifest.json")).await {
         return Err(Error::InvalidProject(

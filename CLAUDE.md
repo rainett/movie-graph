@@ -208,8 +208,8 @@ Project-specific agents in `.claude/agents/`:
 
 ## Current Focus
 
-**Milestone:** M3 - TMDB Integration
-**Status:** Complete
+**Milestone:** M5 - Image Caching & Polish
+**Status:** Next
 
 ### M1 — Foundation: COMPLETE
 - [x] Tauri + SvelteKit scaffolded, Tailwind CSS v4 configured
@@ -238,14 +238,24 @@ Project-specific agents in `.claude/agents/`:
 - [x] Actor suggestions: top 5 most popular movies not in graph, shown in Inspect mode
 - [x] `selectionStore` bridges GraphMonitor node clicks → ControlTerminal Inspect mode
 
-### M4 — Graph Building: Next
-1. [ ] Wire ADD TO GRAPH button (search result → `graphStore.addMovie`)
-2. [ ] Wire [+] suggestion buttons (actor suggestions → `graphStore.addMovie`)
-3. [ ] Wire [ADD ACTOR] from movie cast (Inspect mode → `graphStore.addActor`)
-4. [ ] Auto-create edges on add (movie ↔ actor)
-5. [ ] ELK.js auto-layout on graph change
-6. [ ] Project open/save from status bar / `Ctrl+S`
-7. [ ] Delete node (with confirmation)
+### M4 — Graph Building: COMPLETE
+- [x] Wire ADD TO GRAPH button (search preview → `graphStore.addMovie` + auto-edges)
+- [x] Wire [+] suggestion buttons (actor suggestions → `graphStore.addMovie` + edge to actor)
+- [x] Wire [ADD ACTOR] from movie cast (Inspect mode → `graphStore.addActor` + edge to movie)
+- [x] Auto-create edges on add (movie ↔ actor, checks existing nodes for connections)
+- [x] ELK.js auto-layout (layered, RIGHT direction, triggers on node count increase)
+- [x] Project open/save from status bar (`pick_folder` Rust command + OPEN/NEW/SAVE buttons)
+- [x] Ctrl+S to save; NEW project modal with name input
+- [x] Delete node from Inspect mode (REMOVE FROM GRAPH, cascades edges)
+- [x] `projectStore` now stores full `Manifest` for correct round-trip saves
+
+### M5 — Image Caching & Polish: Next
+- [ ] Download and cache poster/photo images locally (permanent cache)
+- [ ] `image` crate for Rust image processing
+- [ ] Serve cached images via asset protocol
+- [ ] Settings modal: TMDB API key input + test button
+- [ ] Node status badge (watched/want-to-watch/etc.)
+- [ ] Edge labels / relationship types visible on graph
 
 ## Quick Commands
 

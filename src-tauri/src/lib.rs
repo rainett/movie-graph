@@ -5,7 +5,7 @@ mod models;
 mod services;
 
 use commands::project::{
-    create_project, get_recent_projects, open_project, save_project, validate_project,
+    create_project, get_recent_projects, open_project, pick_folder, save_project, validate_project,
 };
 use commands::tmdb::{
     get_movie_details, get_person_details, search_movies, search_people, test_api_key,
@@ -13,6 +13,8 @@ use commands::tmdb::{
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Load .env file if present (dev convenience; no-op if missing)
+    let _ = dotenvy::dotenv();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -22,6 +24,7 @@ pub fn run() {
             save_project,
             get_recent_projects,
             validate_project,
+            pick_folder,
             search_movies,
             search_people,
             get_movie_details,

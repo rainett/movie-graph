@@ -1,7 +1,9 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { get } from 'svelte/store';
   import { SvelteFlow, Background, BackgroundVariant, Controls, type Node, type Edge as FlowEdge } from '@xyflow/svelte';
   import '@xyflow/svelte/dist/style.css';
+  import ELK from 'elkjs';
   import { graphStore, movieCount, actorCount } from '$lib/stores/graph';
   import { selectionStore } from '$lib/stores/selection';
   import MovieNodeComponent from '../canvas/MovieNode.svelte';
@@ -62,6 +64,55 @@
   }
 
   const isEmpty = $derived($movieCount === 0 && $actorCount === 0);
+
+  // ── ELK auto-layout ───────────────────────────────────────────
+  const elk = new ELK();
+
+  async function runElkLayout() {
+    const g = get(graphStore);
+    const children = [
+      ...Array.from(g.movies.values()).map((m) => ({ id: m.id, width: 160, height: 90 })),
+      ...Array.from(g.actors.values()).map((a) => ({ id: a.id, width: 80, height: 80 })),
+    ];
+    if (children.length === 0) return;
+
+    const edges = Array.from(g.edges.values()).map((e) => ({
+      id: e.id,
+      sources: [e.from],
+      targets: [e.to],
+    }));
+
+    try {
+      const layout = await elk.layout({
+        id: 'root',
+        layoutOptions: {
+          'elk.algorithm': 'layered',
+          'elk.direction': 'RIGHT',
+          'elk.layered.spacing.nodeNodeBetweenLayers': '100',
+          'elk.spacing.nodeNode': '60',
+        },
+        children,
+        edges,
+      });
+      layout.children?.forEach((n) => {
+        const pos = { x: n.x ?? 0, y: n.y ?? 0 };
+        if (n.id.startsWith('m:')) graphStore.updateMoviePosition(n.id, pos);
+        else graphStore.updateActorPosition(n.id, pos);
+      });
+    } catch (err) {
+      console.error('ELK layout failed:', err);
+    }
+  }
+
+  // Trigger layout when node count increases (new nodes added)
+  let layoutNodeCount = 0;
+  $effect(() => {
+    const total = $movieCount + $actorCount;
+    if (total > layoutNodeCount) {
+      layoutNodeCount = total;
+      runElkLayout();
+    }
+  });
 </script>
 
 <div class="device" role="region" aria-label="Graph Monitor">
@@ -84,6 +135,7 @@
       maxZoom={4}
       onnodeclick={handleNodeClick}
       onnodedragstop={handleDragStop}
+      onpaneclick={() => selectionStore.set(null)}
       colorMode="dark"
     >
       <Background gap={32} patternColor="rgba(255,255,255,0.06)" variant={BackgroundVariant.Dots} size={1} />

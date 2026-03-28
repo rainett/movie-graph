@@ -1,9 +1,9 @@
 import { writable, derived } from 'svelte/store';
-import type { Project } from '../types/project';
+import type { Project, Manifest } from '../types/project';
 
 type ProjectState = {
   path: string | null;
-  name: string;
+  manifest: Manifest | null;
   isLoaded: boolean;
   isDirty: boolean;
   lastSaved: Date | null;
@@ -11,7 +11,7 @@ type ProjectState = {
 
 const initialState: ProjectState = {
   path: null,
-  name: '',
+  manifest: null,
   isLoaded: false,
   isDirty: false,
   lastSaved: null,
@@ -25,7 +25,7 @@ function createProjectStore() {
     load(project: Project) {
       set({
         path: project.path,
-        name: project.manifest.name,
+        manifest: project.manifest,
         isLoaded: true,
         isDirty: false,
         lastSaved: new Date(project.manifest.modified_at),
