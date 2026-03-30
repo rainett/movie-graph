@@ -6,8 +6,11 @@
   import ELK from 'elkjs';
   import { graphStore, movieCount, actorCount } from '$lib/stores/graph';
   import { selectionStore } from '$lib/stores/selection';
+  import { historyStore } from '$lib/stores/history';
+  import { MoveNodeCommand } from '$lib/commands/move-command';
   import MovieNodeComponent from '../canvas/MovieNode.svelte';
   import ActorNodeComponent from '../canvas/ActorNode.svelte';
+  import HistoryStrip from './HistoryStrip.svelte';
 
   const nodeTypes = {
     movie: MovieNodeComponent,
@@ -17,24 +20,22 @@
   let flowNodes: Node[] = $state([]);
   let flowEdges: FlowEdge[] = $state([]);
 
-  // Sync graphStore → flow (preserve existing positions on update)
+  // Sync graphStore → flow (graphStore is source of truth for positions)
   $effect(() => {
     const g = $graphStore;
 
     untrack(() => {
-      const posMap = new Map(flowNodes.map((n) => [n.id, n.position]));
-
       flowNodes = [
         ...Array.from(g.movies.values()).map((m) => ({
           id: m.id,
           type: 'movie' as const,
-          position: posMap.get(m.id) ?? { x: m.position.x, y: m.position.y },
+          position: { x: m.position.x, y: m.position.y },
           data: m,
         })),
         ...Array.from(g.actors.values()).map((a) => ({
           id: a.id,
           type: 'actor' as const,
-          position: posMap.get(a.id) ?? { x: a.position.x, y: a.position.y },
+          position: { x: a.position.x, y: a.position.y },
           data: a,
         })),
       ];
@@ -54,13 +55,22 @@
     }
   }
 
-  // Sync dragged positions back to graphStore
-  function handleDragStop({ targetNode }: { targetNode: Node | null; nodes: Node[]; event: MouseEvent | TouchEvent }) {
+  // Track drag start position for MoveNodeCommand
+  let dragStartPos: { x: number; y: number } | null = null;
+
+  function handleDragStart({ targetNode }: { targetNode: Node | null }) {
     if (!targetNode) return;
-    if (targetNode.type === 'movie') {
-      graphStore.updateMoviePosition(targetNode.id, targetNode.position);
-    } else if (targetNode.type === 'actor') {
-      graphStore.updateActorPosition(targetNode.id, targetNode.position);
+    dragStartPos = { ...targetNode.position };
+  }
+
+  function handleDragStop({ targetNode }: { targetNode: Node | null; nodes: Node[]; event: MouseEvent | TouchEvent }) {
+    if (!targetNode || !dragStartPos) { dragStartPos = null; return; }
+    if (targetNode.type !== 'movie' && targetNode.type !== 'actor') { dragStartPos = null; return; }
+    const newPos = { ...targetNode.position };
+    const oldPos = dragStartPos;
+    dragStartPos = null;
+    if (oldPos.x !== newPos.x || oldPos.y !== newPos.y) {
+      historyStore.execute(new MoveNodeCommand(targetNode.id, targetNode.type, oldPos, newPos));
     }
   }
 
@@ -133,7 +143,7 @@
     </div>
   </div>
 
-  <div class="device-screen">
+  <div class="device-screen" style="margin-bottom: 0;">
     <SvelteFlow
       bind:nodes={flowNodes}
       bind:edges={flowEdges}
@@ -142,6 +152,7 @@
       minZoom={0.1}
       maxZoom={4}
       onnodeclick={handleNodeClick}
+      onnodedragstart={handleDragStart}
       onnodedragstop={handleDragStop}
       onpaneclick={() => selectionStore.set(null)}
       colorMode="dark"
@@ -158,6 +169,7 @@
       {/if}
     </SvelteFlow>
   </div>
+  <HistoryStrip />
 </div>
 
 <style>

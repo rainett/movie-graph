@@ -31,17 +31,23 @@ movie-graph/
 │   └── lib/
 │       ├── components/
 │       │   ├── board/        # Board.svelte (grid bg, two-panel + status bar)
-│       │   ├── devices/      # GraphMonitor.svelte, ControlTerminal.svelte
+│       │   ├── devices/      # GraphMonitor.svelte, ControlTerminal.svelte, HistoryStrip.svelte
 │       │   ├── canvas/       # MovieNode.svelte, ActorNode.svelte (SvelteFlow nodes)
 │       │   ├── controls/     # (future: buttons, sliders, toggles)
 │       │   └── overlays/     # SettingsModal.svelte (TMDB key + test)
 │       ├── stores/
 │       │   ├── graph.ts      # graphStore (movies/actors/edges maps + updateMovie/updateActor)
+│       │   ├── history.ts    # historyStore (undo/redo stack, canUndo/canRedo derived)
 │       │   ├── project.ts    # projectStore (current open project)
 │       │   └── selection.ts  # selectionStore (selected node id + type)
 │       ├── services/
 │       │   └── tauri.ts      # All typed IPC wrappers (invoke calls)
-│       ├── commands/         # (future: undo/redo command pattern)
+│       ├── commands/
+│       │   ├── index.ts          # Command interface { execute, undo, description }
+│       │   ├── node-commands.ts  # AddMovieCommand, AddActorCommand, DeleteNodeCommand
+│       │   ├── move-command.ts   # MoveNodeCommand (drag undo/redo)
+│       │   ├── edit-command.ts   # EditMovieCommand, EditActorCommand
+│       │   └── edge-commands.ts  # AddEdgeCommand, DeleteEdgeCommand
 │       ├── types/
 │       │   ├── project.ts    # Project, Manifest, RecentProject, ValidationResult
 │       │   ├── node.ts       # MovieNode, ActorNode, Status, Position
@@ -148,11 +154,18 @@ let results = client.search_movies("inception", 1).await?;
 
 ### Command Pattern (Undo/Redo) — M6
 ```typescript
-// src/lib/commands/node.ts (future)
-export class AddNodeCommand implements Command {
-  execute() { /* add node */ }
-  undo() { /* remove node */ }
-}
+// src/lib/commands/index.ts
+export interface Command { execute(): void; undo(): void; description: string; }
+
+// src/lib/stores/history.ts
+import { historyStore, canUndo, canRedo } from '$lib/stores/history';
+historyStore.execute(new AddMovieCommand(node, edges)); // execute + push to undoStack
+historyStore.undo();  // pop undoStack, call cmd.undo(), push to redoStack
+historyStore.redo();  // pop redoStack, call cmd.execute(), push to undoStack
+
+// Commands call graphStore + projectStore.markDirty() internally
+// DeleteNodeCommand snapshots node + connected edges in constructor via get(graphStore)
+// MoveNodeCommand: oldPos captured in onnodedragstart, newPos in onnodedragstop
 ```
 
 ## Installed Dependencies
@@ -219,7 +232,7 @@ Project-specific agents in `.claude/agents/`:
 
 ## Current Focus
 
-**Milestone:** M6 - History System (Undo/Redo)
+**Milestone:** M7 - Filtering & Status
 **Status:** Next
 
 ### M1 — Foundation: COMPLETE
@@ -275,15 +288,28 @@ Project-specific agents in `.claude/agents/`:
 - [x] `graphStore.updateMovie` / `updateActor` partial-update methods
 - [x] `/plan-milestone` skill added for decomposing future milestones
 
-### M6 — History System: Next
-- [ ] Command pattern implementation (`src/lib/commands/`)
-- [ ] Add node command (movie + actor)
-- [ ] Delete node command
-- [ ] Move node command
-- [ ] Edit node command (status, rating, notes)
-- [ ] Add/delete edge commands
-- [ ] Undo (Ctrl+Z) / Redo (Ctrl+Shift+Z) keyboard shortcuts
-- [ ] History strip UI in Graph Monitor (tape transport display)
+### M6 — History System: COMPLETE
+- [x] Command pattern implementation (`src/lib/commands/`)
+- [x] Add node command (movie + actor) — `AddMovieCommand`, `AddActorCommand`
+- [x] Delete node command — `DeleteNodeCommand` (snapshots node + edges for undo)
+- [x] Move node command — `MoveNodeCommand` (dragStart/dragStop position capture)
+- [x] Edit node command (status) — `EditMovieCommand`, `EditActorCommand`
+- [x] Add/delete edge commands — `AddEdgeCommand`, `DeleteEdgeCommand`
+- [x] Undo (Ctrl+Z) / Redo (Ctrl+Shift+Z, Ctrl+Y) keyboard shortcuts
+- [x] History strip UI in Graph Monitor — `HistoryStrip.svelte` (tape transport display)
+- [x] `historyStore` with 50-entry cap, `canUndo`/`canRedo` derived stores
+- [x] All add/delete/edit/move actions wired through `historyStore.execute()`
+- [x] graphStore positions now source-of-truth (dropped posMap — enables move undo)
+
+### M7 — Filtering & Status: Next
+- [ ] Filter store and logic
+- [ ] Status enum on nodes (already partially done — status field exists, editing wired)
+- [ ] Rating field on nodes
+- [ ] Filter mode UI (ControlTerminal Filter mode — currently placeholder)
+- [ ] Status/rating edit in Inspect mode
+- [ ] Dim non-matching nodes
+- [ ] Filter active indicator
+- [ ] Notes field on nodes
 
 ## Quick Commands
 

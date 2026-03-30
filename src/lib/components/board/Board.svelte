@@ -4,6 +4,7 @@
   import SettingsModal from '../overlays/SettingsModal.svelte';
   import { movieCount, actorCount, graphStore } from '$lib/stores/graph';
   import { projectStore } from '$lib/stores/project';
+  import { historyStore } from '$lib/stores/history';
   import { createProject, openProject, saveProject, pickFolder } from '$lib/services/tauri';
   import type { Project } from '$lib/types/project';
 
@@ -73,11 +74,19 @@
     }
   }
 
-  // Ctrl+S to save
+  // Keyboard shortcuts
   function onKeyDown(e: KeyboardEvent) {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
       e.preventDefault();
       handleSave();
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      historyStore.undo();
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+      e.preventDefault();
+      historyStore.redo();
     }
   }
 

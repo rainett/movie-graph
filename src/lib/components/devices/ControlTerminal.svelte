@@ -7,6 +7,9 @@
   import { selectionStore } from '$lib/stores/selection';
   import { graphStore } from '$lib/stores/graph';
   import { projectStore } from '$lib/stores/project';
+  import { historyStore } from '$lib/stores/history';
+  import { AddMovieCommand, AddActorCommand, DeleteNodeCommand } from '$lib/commands/node-commands';
+  import { EditMovieCommand } from '$lib/commands/edit-command';
   import type { MovieNode, ActorNode } from '$lib/types/node';
   import type { Status } from '$lib/types/node';
   import type { Edge } from '$lib/types/edge';
@@ -208,8 +211,9 @@
   function setStatus(status: Status) {
     const sel = $selectionStore;
     if (!sel || sel.type !== 'movie') return;
-    graphStore.updateMovie(sel.id, { status });
-    projectStore.markDirty();
+    const currentNode = $graphStore.movies.get(sel.id);
+    if (!currentNode) return;
+    historyStore.execute(new EditMovieCommand(sel.id, { status: currentNode.status }, { status }));
   }
 
   // ── Add / remove graph actions ─────────────────────────────────
@@ -217,22 +221,23 @@
     if (!preview) return;
     const node = movieDetailsToNode(preview);
     if ($graphStore.movies.has(node.id)) return;
-    graphStore.addMovie(node);
-    // Auto-create edges to actors already in graph that are in this cast
+    const edges: Edge[] = [];
     const castIds = new Set(preview.credits.cast.map((c) => `a:${c.id}`));
     for (const actorId of $graphStore.actors.keys()) {
-      if (castIds.has(actorId)) graphStore.addEdge(makeEdge(node.id, actorId));
+      if (castIds.has(actorId)) edges.push(makeEdge(node.id, actorId));
     }
+    historyStore.execute(new AddMovieCommand(node, edges));
     cacheNodeImage(node.id, preview.poster_path, 'movie');
   }
 
   function addActorFromCast(member: CastMember) {
     const node = castMemberToActorNode(member);
     if ($graphStore.actors.has(node.id)) return;
-    graphStore.addActor(node);
+    const edges: Edge[] = [];
     if (inspectedMovie && $graphStore.movies.has(`m:${inspectedMovie.id}`)) {
-      graphStore.addEdge(makeEdge(`m:${inspectedMovie.id}`, node.id));
+      edges.push(makeEdge(`m:${inspectedMovie.id}`, node.id));
     }
+    historyStore.execute(new AddActorCommand(node, edges));
     cacheNodeImage(node.id, member.profile_path, 'actor');
   }
 
@@ -259,10 +264,10 @@
       }
       const node = movieDetailsToNode(details);
       if ($graphStore.movies.has(node.id)) return;
-      graphStore.addMovie(node);
-      // Edge goes actor → movie (discovery direction: actor is parent, movie is child)
+      const edges: Edge[] = [];
       const sel = $selectionStore;
-      if (sel?.type === 'actor') graphStore.addEdge(makeEdge(sel.id, node.id));
+      if (sel?.type === 'actor') edges.push(makeEdge(sel.id, node.id));
+      historyStore.execute(new AddMovieCommand(node, edges));
       if (inspectedPerson) actorSuggestions = buildSuggestions(inspectedPerson);
       cacheNodeImage(node.id, details.poster_path, 'movie');
     } finally {
@@ -273,13 +278,7 @@
   function deleteInspectedNode() {
     const sel = $selectionStore;
     if (!sel) return;
-    const edgesToRemove = Array.from($graphStore.edges.entries())
-      .filter(([, edge]) => edge.from === sel.id || edge.to === sel.id)
-      .map(([id]) => id);
-    for (const id of edgesToRemove) graphStore.removeEdge(id);
-    if (sel.type === 'movie') graphStore.removeMovie(sel.id);
-    else graphStore.removeActor(sel.id);
-    selectionStore.set(null);
+    historyStore.execute(new DeleteNodeCommand(sel.id, sel.type));
   }
 </script>
 
