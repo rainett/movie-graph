@@ -1,17 +1,50 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import GraphMonitor from '../devices/GraphMonitor.svelte';
   import ControlTerminal from '../devices/ControlTerminal.svelte';
   import SettingsModal from '../overlays/SettingsModal.svelte';
+  import KeyboardShortcutsModal from '../overlays/KeyboardShortcutsModal.svelte';
   import { movieCount, actorCount, graphStore } from '$lib/stores/graph';
   import { projectStore } from '$lib/stores/project';
   import { historyStore } from '$lib/stores/history';
+  import { selectionStore } from '$lib/stores/selection';
+  import { terminalModeStore } from '$lib/stores/terminal';
+  import type { TerminalMode } from '$lib/stores/terminal';
   import { createProject, openProject, saveProject, pickFolder } from '$lib/services/tauri';
+  import { DeleteNodeCommand } from '$lib/commands/node-commands';
+  import { playSound } from '$lib/services/sound';
   import type { Project } from '$lib/types/project';
 
+  let boardEl: HTMLElement;
   let saveStatus = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
   let newProjectModal = $state(false);
   let newProjectName = $state('');
   let settingsOpen = $state(false);
+  let shortcutsOpen = $state(false);
+
+  // Auto-save
+  let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  let autoSaveStatus = $state<'idle' | 'saving' | 'saved'>('idle');
+
+  $effect(() => {
+    const ps = $projectStore;
+    if (!ps.isLoaded || !ps.isDirty) {
+      if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; }
+      return;
+    }
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(async () => {
+      autoSaveStatus = 'saving';
+      await handleSave();
+      autoSaveStatus = 'saved';
+      setTimeout(() => (autoSaveStatus = 'idle'), 2000);
+    }, 30000);
+  });
+
+  onMount(() => {
+    boardEl.classList.add('device-boot');
+    setTimeout(() => boardEl.classList.remove('device-boot'), 600);
+  });
 
   async function handleSave() {
     const ps = $projectStore;
@@ -76,17 +109,60 @@
 
   // Keyboard shortcuts
   function onKeyDown(e: KeyboardEvent) {
+    const target = e.target as HTMLElement;
+    const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
+
+    // Global shortcuts (work even in inputs)
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
       e.preventDefault();
+      playSound('save');
       handleSave();
+      return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
       e.preventDefault();
+      playSound('undo');
       historyStore.undo();
+      return;
     }
     if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
       e.preventDefault();
+      playSound('undo');
       historyStore.redo();
+      return;
+    }
+    if (e.key === 'Escape') {
+      selectionStore.set(null);
+      shortcutsOpen = false;
+      return;
+    }
+
+    // Shortcuts that should not fire inside text inputs
+    if (isInput) return;
+
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      const sel = $selectionStore;
+      if (sel) {
+        e.preventDefault();
+        playSound('delete');
+        historyStore.execute(new DeleteNodeCommand(sel.id, sel.type));
+      }
+      return;
+    }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const modes: TerminalMode[] = ['search', 'inspect', 'filter'];
+      terminalModeStore.update((m) => {
+        const idx = modes.indexOf(m);
+        return modes[(idx + 1) % modes.length];
+      });
+      playSound('modeSwitch');
+      return;
+    }
+    if (e.key === '?' || e.key === 'F1') {
+      e.preventDefault();
+      shortcutsOpen = true;
+      return;
     }
   }
 
@@ -96,11 +172,16 @@
     saveStatus === 'error' ? 'SAVE FAILED' :
     $projectStore.isDirty ? '[SAVE]' : 'SAVED'
   );
+
+  const autoSaveLabel = $derived(
+    autoSaveStatus === 'saving' ? 'AUTOSAVE...' :
+    autoSaveStatus === 'saved' ? 'AUTO SAVED' : null
+  );
 </script>
 
 <svelte:window onkeydown={onKeyDown} />
 
-<div class="board">
+<div class="board" bind:this={boardEl}>
   <div class="board-devices">
     <GraphMonitor />
     <ControlTerminal />
@@ -112,6 +193,9 @@
     <span class="status-sep">·</span>
     <span class="status-stats">{$movieCount} MOVIES · {$actorCount} ACTORS</span>
     <div class="status-actions">
+      {#if autoSaveLabel}
+        <span class="autosave-label" class:autosave-saving={autoSaveStatus === 'saving'}>{autoSaveLabel}</span>
+      {/if}
       <button class="status-btn" onclick={handleOpen}>OPEN</button>
       <button class="status-btn" onclick={handleNewProject}>NEW</button>
       {#if $projectStore.isLoaded}
@@ -131,6 +215,10 @@
 
 {#if settingsOpen}
   <SettingsModal onclose={() => (settingsOpen = false)} />
+{/if}
+
+{#if shortcutsOpen}
+  <KeyboardShortcutsModal onclose={() => (shortcutsOpen = false)} />
 {/if}
 
 {#if newProjectModal}
@@ -210,7 +298,20 @@
 .status-actions {
   margin-left: auto;
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+
+.autosave-label {
+  color: var(--color-led-green);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  opacity: 0.8;
+}
+
+.autosave-label.autosave-saving {
+  color: var(--color-warning);
 }
 
 .status-btn {

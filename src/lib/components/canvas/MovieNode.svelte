@@ -31,7 +31,7 @@
 <div class="node-card" class:selected class:dimmed>
   <div class="poster-area">
     {#if data.poster}
-      <img class="poster" src={data.poster} alt={data.title} />
+      <img class="poster poster-vhs" src={data.poster} alt={data.title} />
     {:else}
       <div class="no-signal">
         <span class="no-signal-text">NO SIGNAL</span>
@@ -67,6 +67,7 @@
   cursor: pointer;
   transition: border-color var(--duration-fast) var(--ease-mechanical);
   user-select: none;
+  animation: node-record 0.3s var(--ease-soft) both;
 }
 
 .node-card.selected {
@@ -91,7 +92,6 @@
   height: 100%;
   object-fit: cover;
   display: block;
-  filter: sepia(0.06) saturate(0.95) contrast(1.05);
 }
 
 .no-signal {

@@ -15,9 +15,9 @@
   import type { MovieNode, ActorNode } from '$lib/types/node';
   import type { Status } from '$lib/types/node';
   import type { Edge } from '$lib/types/edge';
-
-  type Mode = 'search' | 'inspect' | 'filter';
-  let activeMode: Mode = $state('search');
+  import { terminalModeStore } from '$lib/stores/terminal';
+  import { get } from 'svelte/store';
+  import { playSound } from '$lib/services/sound';
 
   // ── Helpers ───────────────────────────────────────────────────
   function movieDetailsToNode(details: MovieDetails): MovieNode {
@@ -85,6 +85,7 @@
     } catch (e: unknown) {
       searchError = typeof e === 'string' ? e : 'Search failed';
       searchResults = [];
+      triggerErrorState();
     } finally {
       searchLoading = false;
     }
@@ -94,7 +95,10 @@
     query = (e.target as HTMLInputElement).value;
     preview = null;
     if (searchTimer) clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => runSearch(query), 400);
+    searchTimer = setTimeout(() => {
+      playSound('search');
+      runSearch(query);
+    }, 400);
   }
 
   async function selectSearchResult(movie: MovieResult) {
@@ -153,13 +157,24 @@
   let inspectedPerson: PersonDetails | null = $state(null);
   let actorSuggestions: MovieCredit[] = $state([]);
 
+  // Error display state
+  let showError = $state(false);
+  let errorTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function triggerErrorState() {
+    showError = true;
+    playSound('error');
+    if (errorTimer) clearTimeout(errorTimer);
+    errorTimer = setTimeout(() => (showError = false), 3000);
+  }
+
   // React to selection changes
   $effect(() => {
     const sel = $selectionStore;
-    // Use untrack so activeMode is not a dependency — avoids the effect
+    // Use untrack so terminalModeStore is not a dependency — avoids the effect
     // re-running (and forcing back to inspect) when the user clicks a mode tab
     untrack(() => {
-      if (sel && activeMode !== 'inspect') activeMode = 'inspect';
+      if (sel && get(terminalModeStore) !== 'inspect') terminalModeStore.set('inspect');
     });
     if (!sel) {
       inspectedMovie = null;
@@ -263,6 +278,7 @@
     for (const actorId of $graphStore.actors.keys()) {
       if (castIds.has(actorId)) edges.push(makeEdge(node.id, actorId));
     }
+    playSound('add');
     historyStore.execute(new AddMovieCommand(node, edges));
     cacheNodeImage(node.id, preview.poster_path, 'movie');
   }
@@ -274,6 +290,7 @@
     if (inspectedMovie && $graphStore.movies.has(`m:${inspectedMovie.id}`)) {
       edges.push(makeEdge(`m:${inspectedMovie.id}`, node.id));
     }
+    playSound('add');
     historyStore.execute(new AddActorCommand(node, edges));
     cacheNodeImage(node.id, member.profile_path, 'actor');
   }
@@ -315,6 +332,7 @@
   function deleteInspectedNode() {
     const sel = $selectionStore;
     if (!sel) return;
+    playSound('delete');
     historyStore.execute(new DeleteNodeCommand(sel.id, sel.type));
   }
 </script>
@@ -324,38 +342,38 @@
     <span class="device-title">CONTROL TERMINAL</span>
     <div class="device-indicators">
       <div class="led led-green" aria-hidden="true"></div>
-      <div class="led" class:led-amber={searchError || inspectError} aria-hidden="true"></div>
+      <div class="led" class:led-amber={searchError || inspectError} class:led-blink={showError} aria-hidden="true"></div>
     </div>
   </div>
 
   <div role="tablist" aria-label="Terminal Modes" class="mode-bar">
     <button
       role="tab"
-      aria-selected={activeMode === 'search'}
+      aria-selected={$terminalModeStore === 'search'}
       class="mode-btn"
-      class:active={activeMode === 'search'}
-      onclick={() => (activeMode = 'search')}
+      class:active={$terminalModeStore === 'search'}
+      onclick={() => { playSound('modeSwitch'); terminalModeStore.set('search'); }}
     >SEARCH</button>
     <button
       role="tab"
-      aria-selected={activeMode === 'inspect'}
+      aria-selected={$terminalModeStore === 'inspect'}
       class="mode-btn"
-      class:active={activeMode === 'inspect'}
-      onclick={() => (activeMode = 'inspect')}
+      class:active={$terminalModeStore === 'inspect'}
+      onclick={() => { playSound('modeSwitch'); terminalModeStore.set('inspect'); }}
     >INSPECT</button>
     <button
       role="tab"
-      aria-selected={activeMode === 'filter'}
+      aria-selected={$terminalModeStore === 'filter'}
       class="mode-btn"
-      class:active={activeMode === 'filter'}
-      onclick={() => (activeMode = 'filter')}
+      class:active={$terminalModeStore === 'filter'}
+      onclick={() => { playSound('modeSwitch'); terminalModeStore.set('filter'); }}
     >FILTER{#if $isFilterActive}<span class="filter-dot" aria-label="filters active"></span>{/if}</button>
   </div>
 
-  <div class="device-screen">
+  <div class="device-screen" class:device-error-screen={showError}>
 
     <!-- ── SEARCH MODE ── -->
-    {#if activeMode === 'search'}
+    {#if $terminalModeStore === 'search'}
       <div class="mode-content">
         <div class="input-wrap">
           <input
@@ -372,14 +390,22 @@
         </div>
 
         {#if searchLoading}
-          <div class="tracking-anim">
-            <div class="tracking-line"></div>
-            <span class="tracking-label">SEARCHING...</span>
+          <div class="skeleton-list">
+            {#each [1, 2, 3] as _i}
+              <div class="skeleton-row">
+                <div class="skeleton-thumb skeleton-poster"></div>
+                <div class="skeleton-info">
+                  <div class="skeleton-line skeleton-poster" style="width:80%;height:11px;border-radius:2px"></div>
+                  <div class="skeleton-line skeleton-poster" style="width:50%;height:9px;border-radius:2px;margin-top:5px"></div>
+                </div>
+              </div>
+            {/each}
           </div>
         {:else if searchError}
           <div class="error-panel">
             <span class="error-label">⚠ SIGNAL LOST</span>
-            <span class="error-msg">{searchError}</span>
+            <span class="error-msg">TMDB unreachable</span>
+            <button class="retry-btn" onclick={() => runSearch(query)}>RETRY</button>
           </div>
         {:else if preview}
           <div class="preview-panel">
@@ -463,7 +489,7 @@
       </div>
 
     <!-- ── INSPECT MODE ── -->
-    {:else if activeMode === 'inspect'}
+    {:else if $terminalModeStore === 'inspect'}
       <div class="mode-content">
         {#if !$selectionStore}
           <div class="placeholder-msg">SELECT A NODE</div>
@@ -641,7 +667,7 @@
       </div>
 
     <!-- ── FILTER MODE ── -->
-    {:else if activeMode === 'filter'}
+    {:else if $terminalModeStore === 'filter'}
       <div class="mode-content">
 
         <div class="filter-group">
@@ -787,6 +813,10 @@
   background: #ffb700;
   box-shadow: 0 0 6px #ffb700, 0 0 12px rgba(255, 183, 0, 0.3),
     inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.led-blink {
+  animation: led-blink 0.4s step-end infinite;
 }
 
 .mode-bar {
@@ -948,6 +978,49 @@
   color: var(--color-text-secondary);
   font-family: var(--font-mono);
   font-size: 11px;
+}
+
+.retry-btn {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid rgba(255, 80, 80, 0.4);
+  border-radius: 2px;
+  color: #ff6060;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  margin-top: 4px;
+  padding: 3px 10px;
+  transition: opacity var(--duration-fast);
+}
+.retry-btn:hover { opacity: 0.75; }
+
+/* Skeleton loader */
+.skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.skeleton-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px;
+}
+
+.skeleton-thumb {
+  width: 36px;
+  height: 54px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.skeleton-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Results list */

@@ -85,3 +85,7 @@ export async function getConfig(): Promise<AppConfig> {
 export async function saveConfig(config: AppConfig): Promise<void> {
   return tauriInvoke('save_config', { config });
 }
+
+export async function backupProject(projectPath: string): Promise<string> {
+  return tauriInvoke('backup_project', { projectPath });
+}

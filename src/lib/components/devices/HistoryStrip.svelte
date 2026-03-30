@@ -1,5 +1,6 @@
 <script lang="ts">
   import { historyStore, canUndo, canRedo } from '$lib/stores/history';
+  import { playSound } from '$lib/services/sound';
 
   const MAX_VISIBLE = 6;
 
@@ -12,7 +13,7 @@
   <button
     class="transport-btn"
     disabled={!$canUndo}
-    onclick={() => historyStore.undo()}
+    onclick={() => { playSound('undo'); historyStore.undo(); }}
     title="Undo (Ctrl+Z)"
     aria-label="Undo"
   >◀◀</button>
@@ -33,7 +34,7 @@
   <button
     class="transport-btn"
     disabled={!$canRedo}
-    onclick={() => historyStore.redo()}
+    onclick={() => { playSound('undo'); historyStore.redo(); }}
     title="Redo (Ctrl+Shift+Z)"
     aria-label="Redo"
   >▶▶</button>

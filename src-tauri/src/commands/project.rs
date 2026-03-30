@@ -117,6 +117,44 @@ pub async fn get_recent_projects() -> Result<Vec<RecentProject>, Error> {
 }
 
 #[tauri::command]
+pub async fn backup_project(project_path: String) -> Result<String, Error> {
+    let source = PathBuf::from(&project_path);
+    if !FileService::exists(&source).await {
+        return Err(Error::ProjectNotFound(project_path));
+    }
+
+    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+    let parent = source
+        .parent()
+        .ok_or_else(|| Error::Unknown("Cannot determine parent directory".to_string()))?;
+    let folder_name = source
+        .file_name()
+        .ok_or_else(|| Error::Unknown("Cannot determine folder name".to_string()))?
+        .to_string_lossy();
+
+    let backup_name = format!("{}_backup_{}", folder_name, timestamp);
+    let backup_path = parent.join(&backup_name);
+
+    copy_dir_all(&source, &backup_path).await?;
+
+    Ok(backup_path.to_string_lossy().to_string())
+}
+
+async fn copy_dir_all(src: &std::path::Path, dst: &std::path::Path) -> Result<(), Error> {
+    tokio::fs::create_dir_all(dst).await?;
+    let mut entries = tokio::fs::read_dir(src).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        let ty = entry.file_type().await?;
+        if ty.is_dir() {
+            Box::pin(copy_dir_all(&entry.path(), &dst.join(entry.file_name()))).await?;
+        } else {
+            tokio::fs::copy(entry.path(), dst.join(entry.file_name())).await?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn validate_project(path: PathBuf) -> Result<ValidationResult, Error> {
     let mut errors = Vec::new();
 

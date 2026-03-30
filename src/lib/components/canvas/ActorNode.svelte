@@ -15,13 +15,10 @@
 <div class="node-card" class:selected class:dimmed>
   <div class="photo-area">
     {#if data.photo}
-      <img class="photo" src={data.photo} alt={data.name} />
+      <img class="photo poster-vhs" src={data.photo} alt={data.name} />
     {:else}
-      <div class="no-photo">
-        <svg class="person-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-          <circle cx="12" cy="7" r="4" />
-        </svg>
+      <div class="no-signal">
+        <span class="no-signal-text">NO SIGNAL</span>
       </div>
     {/if}
   </div>
@@ -44,6 +41,7 @@
   cursor: pointer;
   transition: border-color var(--duration-fast) var(--ease-mechanical);
   user-select: none;
+  animation: node-record 0.3s var(--ease-soft) both;
 }
 
 .node-card.selected {
@@ -68,22 +66,34 @@
   object-fit: cover;
   object-position: top;
   display: block;
-  filter: sepia(0.06) saturate(0.95) contrast(1.05);
 }
 
-.no-photo {
+.no-signal {
   width: 100%;
   height: 100%;
+  background: linear-gradient(
+    90deg,
+    #fff 0%, #fff 14.28%,
+    #ff0 14.28%, #ff0 28.57%,
+    #0ff 28.57%, #0ff 42.85%,
+    #0f0 42.85%, #0f0 57.14%,
+    #f0f 57.14%, #f0f 71.42%,
+    #f00 71.42%, #f00 85.71%,
+    #00f 85.71%, #00f 100%
+  );
+  filter: saturate(0.5) brightness(0.4);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(180deg, #1a2030 0%, #0f1218 100%);
 }
 
-.person-icon {
-  width: 44px;
-  height: 44px;
-  color: #2a3a50;
+.no-signal-text {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.6);
+  padding: 2px 5px;
 }
 
 .node-info {
