@@ -34,15 +34,17 @@ movie-graph/
 │       │   ├── devices/      # GraphMonitor.svelte, ControlTerminal.svelte, HistoryStrip.svelte
 │       │   ├── canvas/       # MovieNode.svelte, ActorNode.svelte (SvelteFlow nodes)
 │       │   ├── controls/     # (future: buttons, sliders, toggles)
-│       │   └── overlays/     # SettingsModal.svelte (TMDB key + test)
+│       │   └── overlays/     # SettingsModal.svelte, KeyboardShortcutsModal.svelte
 │       ├── stores/
 │       │   ├── graph.ts      # graphStore (movies/actors/edges maps + updateMovie/updateActor)
 │       │   ├── history.ts    # historyStore (undo/redo stack, canUndo/canRedo derived)
 │       │   ├── filter.ts     # filterStore (statuses/rating/year/nodeType/text) + matchesMovie/matchesActor
 │       │   ├── project.ts    # projectStore (current open project)
-│       │   └── selection.ts  # selectionStore (selected node id + type)
+│       │   ├── selection.ts  # selectionStore (selected node id + type)
+│       │   └── terminal.ts   # terminalModeStore ('search'|'inspect'|'filter') (M8)
 │       ├── services/
-│       │   └── tauri.ts      # All typed IPC wrappers (invoke calls)
+│       │   ├── tauri.ts      # All typed IPC wrappers (invoke calls)
+│       │   └── sound.ts      # Web Audio API synth sounds, playSound() + setSoundEnabled() (M8)
 │       ├── commands/
 │       │   ├── index.ts          # Command interface { execute, undo, description }
 │       │   ├── node-commands.ts  # AddMovieCommand, AddActorCommand, DeleteNodeCommand
@@ -63,7 +65,7 @@ movie-graph/
 │       ├── lib.rs            # Module exports + command registration
 │       ├── error.rs          # Custom Error enum (thiserror)
 │       ├── commands/
-│       │   ├── project.rs    # create/open/save/validate project, recent projects
+│       │   ├── project.rs    # create/open/save/validate/backup project, recent projects
 │       │   ├── tmdb.rs       # search_movies, search_people, get_movie_details,
 │       │   │                 #   get_person_details, test_api_key
 │       │   ├── images.rs     # cache_image (download → resize → JPEG) (M5)
@@ -169,6 +171,42 @@ historyStore.redo();  // pop redoStack, call cmd.execute(), push to undoStack
 // MoveNodeCommand: oldPos captured in onnodedragstart, newPos in onnodedragstop
 ```
 
+### Terminal Mode Store (M8)
+```typescript
+// src/lib/stores/terminal.ts — shared between Board (Tab shortcut) and ControlTerminal
+import { terminalModeStore } from '$lib/stores/terminal';
+import { get } from 'svelte/store';
+
+// Board.svelte: cycle on Tab key
+terminalModeStore.update(m => modes[(modes.indexOf(m) + 1) % modes.length]);
+
+// ControlTerminal: read store instead of local $state; inside untrack() use get()
+untrack(() => {
+  if (sel && get(terminalModeStore) !== 'inspect') terminalModeStore.set('inspect');
+});
+```
+
+### Sound Service (M8)
+```typescript
+// src/lib/services/sound.ts — Web Audio API, no audio files
+import { playSound, setSoundEnabled } from '$lib/services/sound';
+playSound('add');   // two-tone sine chord
+playSound('delete'); // sawtooth sweep down
+playSound('save');  // ascending three-tone sine
+// setSoundEnabled(false) silences all sounds immediately
+```
+
+### $derived.by() for type-safe narrowing (M8)
+```typescript
+// Use $derived.by(() => { ... }) when $derived ternary loses TypeScript narrowing
+// (e.g. AppConfig | null inside a ternary — TS narrows to 'never' in Svelte 5)
+const autoSaveValue = $derived.by(() => {
+  if (!config) return '0';
+  if (!config.auto_save) return '0';
+  return String(Math.round(config.auto_save_interval_ms / 1000));
+});
+```
+
 ## Installed Dependencies
 
 ### Frontend (npm)
@@ -233,8 +271,8 @@ Project-specific agents in `.claude/agents/`:
 
 ## Current Focus
 
-**Milestone:** M8 - Polish & UX
-**Status:** Next
+**Milestone:** M8 — Polish & UX: **COMPLETE**
+**Next:** No further milestones defined — app is feature-complete through M8.
 
 ### M1 — Foundation: COMPLETE
 - [x] Tauri + SvelteKit scaffolded, Tailwind CSS v4 configured
@@ -312,15 +350,21 @@ Project-specific agents in `.claude/agents/`:
 - [x] Dim non-matching nodes — `class:dimmed` in MovieNode/ActorNode reads filterStore directly (opacity 0.15)
 - [x] Dim non-matching edges — GraphMonitor computes dimmedIds, sets `class: 'dimmed'` on flowEdges (opacity 0.08)
 
-### M8 — Polish & UX: Next
-- [ ] 80s device styling complete (screen effects, CRT warmth)
-- [ ] Sound design integration
-- [ ] Loading states (VHS tracking animations)
-- [ ] Error states (malfunction aesthetic)
-- [ ] Keyboard shortcuts complete
-- [ ] Settings modal improvements
-- [ ] Auto-save with indicator
-- [ ] Backup system
+### M8 — Polish & UX: COMPLETE
+- [x] CSS keyframes: `device-boot`, `node-record`, `skeleton-shimmer`, `static-noise`, `led-blink`
+- [x] Device boot animation: brightness ramp on app start (`Board.svelte` `onMount`)
+- [x] Node appear animation: `node-record` scale-in on every new node card
+- [x] Poster VHS filter (`.poster-vhs`) + color-bar NO SIGNAL placeholder for actors
+- [x] Skeleton loaders: 3 shimmer rows during `searchLoading` in ControlTerminal
+- [x] Error malfunction: `static-noise` overlay + blinking amber LED + RETRY button
+- [x] Sound service: Web Audio API synth (`src/lib/services/sound.ts`) — no audio files
+- [x] Sounds wired to all graph actions, mode switches, save, undo, redo
+- [x] Auto-save: 30s debounce on dirty state, `AUTOSAVE...`/`AUTO SAVED` in status bar
+- [x] Settings modal: sound toggle, auto-save interval selector (Off/30s/1min/5min)
+- [x] Backup system: `backup_project` Rust command + BACKUP PROJECT button in settings
+- [x] `terminalModeStore` shared store for cross-component Tab shortcut cycling
+- [x] Keyboard shortcuts: `Delete`/`Backspace` (remove node), `Escape` (deselect), `Tab` (cycle mode), `?`/`F1` (help)
+- [x] `KeyboardShortcutsModal.svelte`: grouped shortcuts overlay, Escape/click-outside to dismiss
 
 ## Quick Commands
 
