@@ -1,6 +1,7 @@
 <script lang="ts">
   import GraphMonitor from '../devices/GraphMonitor.svelte';
   import ControlTerminal from '../devices/ControlTerminal.svelte';
+  import SettingsModal from '../overlays/SettingsModal.svelte';
   import { movieCount, actorCount, graphStore } from '$lib/stores/graph';
   import { projectStore } from '$lib/stores/project';
   import { createProject, openProject, saveProject, pickFolder } from '$lib/services/tauri';
@@ -9,6 +10,7 @@
   let saveStatus = $state<'idle' | 'saving' | 'saved' | 'error'>('idle');
   let newProjectModal = $state(false);
   let newProjectName = $state('');
+  let settingsOpen = $state(false);
 
   async function handleSave() {
     const ps = $projectStore;
@@ -113,9 +115,14 @@
           disabled={saveStatus === 'saving'}
         >{saveLabel}</button>
       {/if}
+      <button class="status-btn" onclick={() => (settingsOpen = true)}>⚙</button>
     </div>
   </div>
 </div>
+
+{#if settingsOpen}
+  <SettingsModal onclose={() => (settingsOpen = false)} />
+{/if}
 
 {#if newProjectModal}
   <div class="modal-overlay" role="dialog" aria-modal="true" aria-label="New Project">

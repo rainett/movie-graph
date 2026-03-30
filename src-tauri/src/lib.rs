@@ -4,6 +4,8 @@ mod error;
 mod models;
 mod services;
 
+use commands::config::{get_config, save_config};
+use commands::images::cache_image;
 use commands::project::{
     create_project, get_recent_projects, open_project, pick_folder, save_project, validate_project,
 };
@@ -30,6 +32,9 @@ pub fn run() {
             get_movie_details,
             get_person_details,
             test_api_key,
+            cache_image,
+            get_config,
+            save_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

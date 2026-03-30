@@ -68,6 +68,22 @@ function createGraphStore() {
         return { ...s, edges };
       });
     },
+    updateMovie(id: string, updates: Partial<MovieNode>) {
+      update((s) => {
+        const movies = new Map(s.movies);
+        const movie = movies.get(id);
+        if (movie) movies.set(id, { ...movie, ...updates });
+        return { ...s, movies };
+      });
+    },
+    updateActor(id: string, updates: Partial<ActorNode>) {
+      update((s) => {
+        const actors = new Map(s.actors);
+        const actor = actors.get(id);
+        if (actor) actors.set(id, { ...actor, ...updates });
+        return { ...s, actors };
+      });
+    },
     updateMoviePosition(id: string, position: { x: number; y: number }) {
       update((s) => {
         const movies = new Map(s.movies);

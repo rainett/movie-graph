@@ -3,6 +3,7 @@ import type { Project, RecentProject, ValidationResult } from '../types/project'
 import type { MovieNode, ActorNode } from '../types/node';
 import type { Edge } from '../types/edge';
 import type { SearchResults, MovieResult, PersonResult, MovieDetails, PersonDetails } from '../types/tmdb';
+import type { AppConfig } from '../types/config';
 
 export async function createProject(path: string, name: string): Promise<Project> {
   return tauriInvoke('create_project', { path, name });
@@ -66,4 +67,21 @@ export async function getPersonDetails(tmdbId: number, apiKey?: string): Promise
 
 export async function testApiKey(apiKey: string): Promise<boolean> {
   return tauriInvoke('test_api_key', { apiKey });
+}
+
+export async function cacheImage(
+  projectPath: string,
+  url: string,
+  filename: string,
+  subdir: string,
+): Promise<string> {
+  return tauriInvoke('cache_image', { projectPath, url, filename, subdir });
+}
+
+export async function getConfig(): Promise<AppConfig> {
+  return tauriInvoke('get_config');
+}
+
+export async function saveConfig(config: AppConfig): Promise<void> {
+  return tauriInvoke('save_config', { config });
 }

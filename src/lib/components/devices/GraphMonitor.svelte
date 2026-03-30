@@ -43,6 +43,7 @@
         id: e.id,
         source: e.from,
         target: e.to,
+        label: edgeLabel(e.relationship),
       }));
     });
   });
@@ -61,6 +62,13 @@
     } else if (targetNode.type === 'actor') {
       graphStore.updateActorPosition(targetNode.id, targetNode.position);
     }
+  }
+
+  function edgeLabel(relationship: string): string {
+    if (relationship === 'acted_in') return 'ACTED';
+    if (relationship === 'liked_actor') return 'LIKED';
+    if (relationship === 'recommended') return 'REC';
+    return '';
   }
 
   const isEmpty = $derived($movieCount === 0 && $actorCount === 0);
@@ -321,6 +329,18 @@
 
 :global(.svelte-flow__edge.selected .svelte-flow__edge-path) {
   stroke: var(--color-accent-secondary);
+}
+
+:global(.svelte-flow__edge-textwrapper text) {
+  fill: #3a5a70;
+  font-family: 'Courier New', monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+:global(.svelte-flow__edge-textbg) {
+  fill: #0a0e14;
+  opacity: 0.85;
 }
 
 :global(.svelte-flow__handle) {

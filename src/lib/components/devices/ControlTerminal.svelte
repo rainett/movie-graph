@@ -1,11 +1,14 @@
 <script lang="ts">
-  import { searchMovies, getMovieDetails, getPersonDetails } from '$lib/services/tauri';
+  import { searchMovies, getMovieDetails, getPersonDetails, cacheImage } from '$lib/services/tauri';
   import type { MovieResult, MovieDetails, PersonDetails, MovieCredit, CastMember } from '$lib/types/tmdb';
   import { tmdbImage, releaseYear } from '$lib/types/tmdb';
   import { untrack } from 'svelte';
+  import { convertFileSrc } from '@tauri-apps/api/core';
   import { selectionStore } from '$lib/stores/selection';
   import { graphStore } from '$lib/stores/graph';
+  import { projectStore } from '$lib/stores/project';
   import type { MovieNode, ActorNode } from '$lib/types/node';
+  import type { Status } from '$lib/types/node';
   import type { Edge } from '$lib/types/edge';
 
   type Mode = 'search' | 'inspect' | 'filter';
@@ -119,6 +122,25 @@
     searchError = null;
   }
 
+  // ── Image caching helper ──────────────────────────────────────
+  function cacheNodeImage(nodeId: string, tmdbPath: string | null | undefined, type: 'movie' | 'actor') {
+    const ps = $projectStore;
+    if (!ps.isLoaded || !ps.path || !tmdbPath) return;
+    const url = tmdbImage(tmdbPath, 'w500') ?? '';
+    if (!url) return;
+    const filename = nodeId.replace(':', '-'); // 'm:550' → 'm-550'
+    const subdir = type === 'movie' ? 'posters' : 'photos';
+    cacheImage(ps.path, url, filename, subdir)
+      .then((localPath) => {
+        const assetUrl = convertFileSrc(localPath);
+        if (type === 'movie') graphStore.updateMovie(nodeId, { poster: assetUrl });
+        else graphStore.updateActor(nodeId, { photo: assetUrl });
+      })
+      .catch(() => {
+        // Caching failed — keep TMDB URL, images still load online
+      });
+  }
+
   // ── Inspect state ─────────────────────────────────────────────
   let inspectLoading = $state(false);
   let inspectError: string | null = $state(null);
@@ -176,6 +198,20 @@
       .slice(0, 5);
   }
 
+  // ── Status editing ────────────────────────────────────────────
+  const currentMovieNode = $derived(
+    $selectionStore?.type === 'movie'
+      ? $graphStore.movies.get($selectionStore.id) ?? null
+      : null
+  );
+
+  function setStatus(status: Status) {
+    const sel = $selectionStore;
+    if (!sel || sel.type !== 'movie') return;
+    graphStore.updateMovie(sel.id, { status });
+    projectStore.markDirty();
+  }
+
   // ── Add / remove graph actions ─────────────────────────────────
   function addMovieFromPreview() {
     if (!preview) return;
@@ -187,6 +223,7 @@
     for (const actorId of $graphStore.actors.keys()) {
       if (castIds.has(actorId)) graphStore.addEdge(makeEdge(node.id, actorId));
     }
+    cacheNodeImage(node.id, preview.poster_path, 'movie');
   }
 
   function addActorFromCast(member: CastMember) {
@@ -196,6 +233,7 @@
     if (inspectedMovie && $graphStore.movies.has(`m:${inspectedMovie.id}`)) {
       graphStore.addEdge(makeEdge(`m:${inspectedMovie.id}`, node.id));
     }
+    cacheNodeImage(node.id, member.profile_path, 'actor');
   }
 
   let addingSuggestion = $state<number | null>(null);
@@ -226,6 +264,7 @@
       const sel = $selectionStore;
       if (sel?.type === 'actor') graphStore.addEdge(makeEdge(sel.id, node.id));
       if (inspectedPerson) actorSuggestions = buildSuggestions(inspectedPerson);
+      cacheNodeImage(node.id, details.poster_path, 'movie');
     } finally {
       addingSuggestion = null;
     }
@@ -424,6 +463,22 @@
           </div>
           {#if inspectedMovie.overview}
             <p class="preview-overview">{inspectedMovie.overview}</p>
+          {/if}
+          {#if currentMovieNode}
+            <div class="status-row">
+              <span class="status-key">STATUS</span>
+              <select
+                class="status-select"
+                value={currentMovieNode.status}
+                onchange={(e) => setStatus(e.currentTarget.value as Status)}
+              >
+                <option value="none">—</option>
+                <option value="watched">WATCHED</option>
+                <option value="watching">WATCHING</option>
+                <option value="want_to_watch">QUEUED</option>
+                <option value="dropped">DROPPED</option>
+              </select>
+            </div>
           {/if}
           {#if inspectedMovie.credits.cast.length > 0}
             <div class="cast-section">
@@ -897,6 +952,40 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* Status row */
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.status-key {
+  color: var(--color-text-disabled);
+  font-family: var(--font-ui);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  flex-shrink: 0;
+  width: 44px;
+}
+
+.status-select {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid #2a2a38;
+  border-radius: 2px;
+  color: var(--color-text-screen);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  outline: none;
+  padding: 3px 6px;
+  cursor: pointer;
+  transition: border-color var(--duration-fast);
+  flex: 1;
+}
+
+.status-select:focus { border-color: var(--color-accent-primary); }
 
 /* Section labels */
 .section-label {

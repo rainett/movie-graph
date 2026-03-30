@@ -11,6 +11,7 @@ impl FileService {
     pub async fn create_project_structure(path: &Path) -> Result<(), Error> {
         fs::create_dir_all(path.join("data")).await?;
         fs::create_dir_all(path.join("images/posters")).await?;
+        fs::create_dir_all(path.join("images/photos")).await?;
         fs::create_dir_all(path.join("images/custom")).await?;
         fs::create_dir_all(path.join(".backups")).await?;
         Ok(())

@@ -164,6 +164,7 @@ export class AddNodeCommand implements Command {
 - `tauri`, `tauri-plugin-dialog`, `tauri-plugin-opener`
 - `serde`, `serde_json`, `tokio`, `thiserror`, `dirs`, `uuid`, `chrono`
 - `reqwest 0.12` (Bearer auth TMDB client)
+- `dotenvy 0.15` (loads `.env` in dev)
 
 **Still needed in future milestones:**
 ```toml
@@ -240,14 +241,18 @@ Project-specific agents in `.claude/agents/`:
 
 ### M4 — Graph Building: COMPLETE
 - [x] Wire ADD TO GRAPH button (search preview → `graphStore.addMovie` + auto-edges)
-- [x] Wire [+] suggestion buttons (actor suggestions → `graphStore.addMovie` + edge to actor)
-- [x] Wire [ADD ACTOR] from movie cast (Inspect mode → `graphStore.addActor` + edge to movie)
-- [x] Auto-create edges on add (movie ↔ actor, checks existing nodes for connections)
-- [x] ELK.js auto-layout (layered, RIGHT direction, triggers on node count increase)
+- [x] Wire [+] suggestion buttons (actor suggestions → `graphStore.addMovie` + **`actor→movie`** edge)
+- [x] Wire [ADD ACTOR] from movie cast (Inspect mode → `graphStore.addActor` + `movie→actor` edge)
+- [x] Auto-create edges on add (checks existing nodes for connections)
+- [x] ELK.js layered auto-layout (direction RIGHT); edge direction encodes discovery order
 - [x] Project open/save from status bar (`pick_folder` Rust command + OPEN/NEW/SAVE buttons)
 - [x] Ctrl+S to save; NEW project modal with name input
 - [x] Delete node from Inspect mode (REMOVE FROM GRAPH, cascades edges)
-- [x] `projectStore` now stores full `Manifest` for correct round-trip saves
+- [x] `projectStore` stores full `Manifest` for correct round-trip saves
+- [x] Fix inspect mode lock: `untrack()` around `activeMode` write in `$effect`
+- [x] Fix canvas deselect: `onpaneclick` clears `selectionStore`
+- [x] TMDB token fallback: `api_key` → `AppConfig.tmdb_read_access_token` → env var
+- [x] `dotenvy` loads `.env` in dev; `elkjs` aliased to bundled version in `vite.config.js`
 
 ### M5 — Image Caching & Polish: Next
 - [ ] Download and cache poster/photo images locally (permanent cache)
