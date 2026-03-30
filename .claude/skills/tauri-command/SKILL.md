@@ -6,6 +6,15 @@ argument-hint: <command-name> [description]
 
 # Tauri Command Generator
 
+## When to Use This Skill
+
+**Use `/tauri-command`** when adding a **new** IPC command that doesn't already exist.
+
+**Skip and write directly** when:
+- Editing an **existing** command (just use Edit on the Rust file + tauri.ts)
+- The change is a small tweak (< ~20 lines across Rust + TS)
+- You already have an identical pattern in context from the same session
+
 Create a new Tauri IPC command following current project patterns.
 
 ## Input

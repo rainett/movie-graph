@@ -21,6 +21,8 @@
       "Bash(git show *)",
       "Bash(git add *)",
       "Bash(git commit *)",
+      "Bash(git push)",
+      "Bash(git push *)",
       "Bash(ls *)",
       "Bash(cat *)",
       "Bash(mkdir *)",
@@ -41,23 +43,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "file=$(cat | jq -r '.tool_input.file_path // empty'); if [ -n \"$file\" ] && echo \"$file\" | grep -qE '\\.rs$'; then cd /c/Users/PavloKoval1/IdeaProjects/movie-graph/src-tauri && cargo check 2>&1 | head -30; fi",
-            "timeout": 120000,
-            "if": "Write(*.rs)|Edit(*.rs)"
+            "command": "file=$(cat | jq -r '.tool_input.file_path // empty'); if [ -n \"$file\" ] && echo \"$file\" | grep -qE '\\.rs$'; then cd /c/Users/PavloKoval1/IdeaProjects/movie-graph/src-tauri && output=$(cargo check 2>&1); code=$?; if [ $code -ne 0 ]; then echo '=== CARGO CHECK FAILED ==='; echo \"$output\" | head -40; fi; fi",
+            "timeout": 120000
           },
           {
             "type": "command",
-            "command": "file=$(cat | jq -r '.tool_input.file_path // empty'); if [ -n \"$file\" ] && echo \"$file\" | grep -qE '\\.(ts|svelte)$'; then cd /c/Users/PavloKoval1/IdeaProjects/movie-graph && npm run check 2>&1 | tail -10; fi",
-            "timeout": 60000,
-            "if": "Write(*.ts)|Write(*.svelte)|Edit(*.ts)|Edit(*.svelte)"
+            "command": "file=$(cat | jq -r '.tool_input.file_path // empty'); if [ -n \"$file\" ] && echo \"$file\" | grep -qE '\\.(ts|svelte)$'; then cd /c/Users/PavloKoval1/IdeaProjects/movie-graph && output=$(npm run check 2>&1); code=$?; if [ $code -ne 0 ]; then echo '=== NPM CHECK FAILED ==='; echo \"$output\"; fi; fi",
+            "timeout": 60000
           }
         ]
-      }
-    ],
-    "PostToolUse:Edit(CLAUDE.md)": [
-      {
-        "type": "command",
-        "command": "echo '\\n📋 CLAUDE.md updated. Consider:\\n   • git add CLAUDE.md && git commit -m \"docs: update project state\"\\n   • Run /milestone-status to verify completeness\\n'"
       }
     ]
   }

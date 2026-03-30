@@ -28,16 +28,19 @@ Each unit must be **one logical change** — one command, one component, one mod
 
 ### 3. Map each unit to a tool
 
-| Unit type | Tool |
-|-----------|------|
-| New Tauri IPC command (simple CRUD) | `/tauri-command` |
-| New Tauri IPC command (complex async, image processing, lifetimes) | `@rust-expert` |
-| New UI component (standalone) | `/svelte-component` → `@design-reviewer` |
-| UI component with complex reactivity / SvelteFlow integration | `@svelte-expert` |
-| Small edit to existing component | Direct implementation |
-| Multi-file feature sweep | Direct implementation (note: incremental tools won't fire) |
-| Quick codebase lookup | Direct Glob/Read (skip `@explorer`) |
-| Pre-milestone doc verification | `/check-docs` |
+| Unit type | Tool | Skip when |
+|-----------|------|-----------|
+| New Tauri IPC command (simple CRUD) | `/tauri-command` | Editing existing command |
+| New Tauri IPC command (complex async, image processing, lifetimes) | `@rust-expert` | — |
+| New full device/overlay/canvas component | `/svelte-component` → `@design-reviewer` | Component is < ~80 lines or styling is copied from adjacent code |
+| New sub-widget inside existing device | Direct implementation | — |
+| UI component with complex reactivity / SvelteFlow integration | `@svelte-expert` | Problem is solvable by reading existing patterns |
+| Edit to existing component | Direct implementation | — |
+| New store or TS utility | Direct implementation | — |
+| Quick codebase lookup | Direct Glob/Read | Always — `@explorer` is slower than direct search on this small project |
+| Pre-milestone doc verification | `/check-docs` | Milestone is purely additive with no spec ambiguity |
+
+**Default rule:** if you can write a unit confidently without referencing a skill template, write it directly. Skills add value when the template encodes project-specific patterns you'd otherwise have to re-derive.
 
 ### 4. Sequence and flag dependencies
 

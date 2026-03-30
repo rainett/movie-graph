@@ -6,6 +6,20 @@ argument-hint: <ComponentName> [description]
 
 # Svelte Component Generator
 
+## When to Use This Skill
+
+**Use `/svelte-component`** when creating a **new standalone component** that:
+- Is a full device frame, overlay, or canvas node (> ~80 lines)
+- Needs careful 80s aesthetic that requires checking design.md
+- Will be reused across multiple parent components
+
+**Skip and write directly** when:
+- The component is a sub-strip or small widget inside one existing device (e.g., HistoryStrip inside GraphMonitor — < 100 lines, no design ambiguity)
+- Styling can be copied verbatim from an adjacent component in the same file
+- The component is purely structural with no visual design decisions
+
+Always follow `/svelte-component` with `@design-reviewer` for full device/overlay components.
+
 Create a Svelte 5 component following current project patterns.
 
 ## Input
