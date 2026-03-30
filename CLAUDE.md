@@ -34,9 +34,9 @@ movie-graph/
 │       │   ├── devices/      # GraphMonitor.svelte, ControlTerminal.svelte
 │       │   ├── canvas/       # MovieNode.svelte, ActorNode.svelte (SvelteFlow nodes)
 │       │   ├── controls/     # (future: buttons, sliders, toggles)
-│       │   └── overlays/     # (future: modals, poster picker, settings)
+│       │   └── overlays/     # SettingsModal.svelte (TMDB key + test)
 │       ├── stores/
-│       │   ├── graph.ts      # graphStore (movies/actors/edges maps)
+│       │   ├── graph.ts      # graphStore (movies/actors/edges maps + updateMovie/updateActor)
 │       │   ├── project.ts    # projectStore (current open project)
 │       │   └── selection.ts  # selectionStore (selected node id + type)
 │       ├── services/
@@ -46,7 +46,8 @@ movie-graph/
 │       │   ├── project.ts    # Project, Manifest, RecentProject, ValidationResult
 │       │   ├── node.ts       # MovieNode, ActorNode, Status, Position
 │       │   ├── edge.ts       # Edge, Relationship
-│       │   └── tmdb.ts       # TMDB response types + tmdbImage() / releaseYear()
+│       │   ├── tmdb.ts       # TMDB response types + tmdbImage() / releaseYear()
+│       │   └── config.ts     # AppConfig (M5)
 │       └── utils/
 │           └── debounce.ts   # Debounce utility
 ├── src-tauri/                # Rust backend
@@ -56,8 +57,10 @@ movie-graph/
 │       ├── error.rs          # Custom Error enum (thiserror)
 │       ├── commands/
 │       │   ├── project.rs    # create/open/save/validate project, recent projects
-│       │   └── tmdb.rs       # search_movies, search_people, get_movie_details,
-│       │                     #   get_person_details, test_api_key
+│       │   ├── tmdb.rs       # search_movies, search_people, get_movie_details,
+│       │   │                 #   get_person_details, test_api_key
+│       │   ├── images.rs     # cache_image (download → resize → JPEG) (M5)
+│       │   └── config.rs     # get_config, save_config (M5)
 │       ├── services/
 │       │   ├── file_io.rs    # FileService (atomic JSON read/write)
 │       │   ├── cache.rs      # CacheService (file-based, 7-day TTL)
@@ -161,15 +164,15 @@ export class AddNodeCommand implements Command {
 - Tailwind CSS v4 + `@tailwindcss/postcss`
 
 ### Backend (Cargo.toml)
-- `tauri`, `tauri-plugin-dialog`, `tauri-plugin-opener`
+- `tauri` (features: `protocol-asset`), `tauri-plugin-dialog`, `tauri-plugin-opener`
 - `serde`, `serde_json`, `tokio`, `thiserror`, `dirs`, `uuid`, `chrono`
 - `reqwest 0.12` (Bearer auth TMDB client)
 - `dotenvy 0.15` (loads `.env` in dev)
+- `image 0.24` (jpeg feature — download/resize/encode, M5)
 
 **Still needed in future milestones:**
 ```toml
 tauri-plugin-fs = "2"
-image = "0.24"
 ```
 
 ## Custom Skills
@@ -178,11 +181,18 @@ Project-specific skills in `.claude/skills/`:
 
 | Skill | Purpose | When to Use |
 |-------|---------|-------------|
+| `/plan-milestone <N>` | Decompose milestone into atomic tasks mapped to skills/agents | **Before starting a milestone** |
 | `/tauri-command <name>` | Generate Tauri IPC command (Rust + TS binding) | Adding new backend commands |
 | `/svelte-component <name>` | Create Svelte 5 component with 80s styling | New UI components |
 | `/check-docs <area>` | Verify implementation matches docs | Before starting milestone |
 | `/milestone-status [N]` | Check progress + suggest next steps | During/after milestone |
 | `/sync-state [N]` | Update CLAUDE.md + MEMORY.md | **At milestone boundaries** |
+
+### Recommended Milestone Workflow
+
+**Start:** `/plan-milestone N` → `/check-docs` → implement atomic units
+**During:** `/milestone-status N` to check progress
+**End:** `/sync-state N` → commit `feat(MN): ...` → push
 
 ## Hooks (Automatic)
 
@@ -209,7 +219,7 @@ Project-specific agents in `.claude/agents/`:
 
 ## Current Focus
 
-**Milestone:** M5 - Image Caching & Polish
+**Milestone:** M6 - History System (Undo/Redo)
 **Status:** Next
 
 ### M1 — Foundation: COMPLETE
@@ -254,13 +264,26 @@ Project-specific agents in `.claude/agents/`:
 - [x] TMDB token fallback: `api_key` → `AppConfig.tmdb_read_access_token` → env var
 - [x] `dotenvy` loads `.env` in dev; `elkjs` aliased to bundled version in `vite.config.js`
 
-### M5 — Image Caching & Polish: Next
-- [ ] Download and cache poster/photo images locally (permanent cache)
-- [ ] `image` crate for Rust image processing
-- [ ] Serve cached images via asset protocol
-- [ ] Settings modal: TMDB API key input + test button
-- [ ] Node status badge (watched/want-to-watch/etc.)
-- [ ] Edge labels / relationship types visible on graph
+### M5 — Image Caching & Polish: COMPLETE
+- [x] Download and cache poster/photo images locally (permanent cache)
+- [x] `image` crate for Rust image processing (resize ≤500px, JPEG q80)
+- [x] Serve cached images via asset protocol (`convertFileSrc` + `protocol-asset`)
+- [x] Settings modal: TMDB API key input + test button (⚙ in status bar)
+- [x] Node status badge editing (status select in Inspect mode → `graphStore.updateMovie`)
+- [x] Edge labels / relationship types visible on graph (ACTED / LIKED / REC)
+- [x] `get_config` / `save_config` IPC commands + `AppConfig` TS type
+- [x] `graphStore.updateMovie` / `updateActor` partial-update methods
+- [x] `/plan-milestone` skill added for decomposing future milestones
+
+### M6 — History System: Next
+- [ ] Command pattern implementation (`src/lib/commands/`)
+- [ ] Add node command (movie + actor)
+- [ ] Delete node command
+- [ ] Move node command
+- [ ] Edit node command (status, rating, notes)
+- [ ] Add/delete edge commands
+- [ ] Undo (Ctrl+Z) / Redo (Ctrl+Shift+Z) keyboard shortcuts
+- [ ] History strip UI in Graph Monitor (tape transport display)
 
 ## Quick Commands
 
