@@ -2,14 +2,17 @@
   import { Handle, Position } from '@xyflow/svelte';
   import type { NodeProps } from '@xyflow/svelte';
   import type { ActorNode } from '$lib/types/node';
+  import { filterStore, isFilterActive, matchesActor } from '$lib/stores/filter';
 
   type Props = NodeProps & { data: ActorNode };
   let { data, selected }: Props = $props();
+
+  const dimmed = $derived($isFilterActive && !matchesActor(data, $filterStore));
 </script>
 
 <Handle type="target" position={Position.Top} />
 
-<div class="node-card" class:selected>
+<div class="node-card" class:selected class:dimmed>
   <div class="photo-area">
     {#if data.photo}
       <img class="photo" src={data.photo} alt={data.name} />
@@ -46,6 +49,11 @@
 .node-card.selected {
   border-color: var(--color-accent-secondary);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 0 2px rgba(80, 168, 224, 0.3);
+}
+
+.node-card.dimmed {
+  opacity: 0.15;
+  transition: opacity 0.2s ease;
 }
 
 .photo-area {

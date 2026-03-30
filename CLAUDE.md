@@ -38,6 +38,7 @@ movie-graph/
 │       ├── stores/
 │       │   ├── graph.ts      # graphStore (movies/actors/edges maps + updateMovie/updateActor)
 │       │   ├── history.ts    # historyStore (undo/redo stack, canUndo/canRedo derived)
+│       │   ├── filter.ts     # filterStore (statuses/rating/year/nodeType/text) + matchesMovie/matchesActor
 │       │   ├── project.ts    # projectStore (current open project)
 │       │   └── selection.ts  # selectionStore (selected node id + type)
 │       ├── services/
@@ -232,7 +233,7 @@ Project-specific agents in `.claude/agents/`:
 
 ## Current Focus
 
-**Milestone:** M7 - Filtering & Status
+**Milestone:** M8 - Polish & UX
 **Status:** Next
 
 ### M1 — Foundation: COMPLETE
@@ -301,15 +302,25 @@ Project-specific agents in `.claude/agents/`:
 - [x] All add/delete/edit/move actions wired through `historyStore.execute()`
 - [x] graphStore positions now source-of-truth (dropped posMap — enables move undo)
 
-### M7 — Filtering & Status: Next
-- [ ] Filter store and logic
-- [ ] Status enum on nodes (already partially done — status field exists, editing wired)
-- [ ] Rating field on nodes
-- [ ] Filter mode UI (ControlTerminal Filter mode — currently placeholder)
-- [ ] Status/rating edit in Inspect mode
-- [ ] Dim non-matching nodes
-- [ ] Filter active indicator
-- [ ] Notes field on nodes
+### M7 — Filtering & Status: COMPLETE
+- [x] `filterStore` — statuses (Set<Status>), ratingRange, yearRange, nodeType, text + `isFilterActive` derived
+- [x] `matchesMovie()` / `matchesActor()` pure filter functions exported from filter.ts
+- [x] Rating edit in Inspect mode — number input 1–10, wired through `EditMovieCommand`
+- [x] Notes edit in Inspect mode — debounced textarea for movies and actors, wired through `EditMovieCommand`/`EditActorCommand`
+- [x] Filter mode UI — status toggles, rating range, year range, node type selector, text search, CLEAR FILTERS
+- [x] Filter active indicator — amber dot on FILTER tab button when `$isFilterActive`
+- [x] Dim non-matching nodes — `class:dimmed` in MovieNode/ActorNode reads filterStore directly (opacity 0.15)
+- [x] Dim non-matching edges — GraphMonitor computes dimmedIds, sets `class: 'dimmed'` on flowEdges (opacity 0.08)
+
+### M8 — Polish & UX: Next
+- [ ] 80s device styling complete (screen effects, CRT warmth)
+- [ ] Sound design integration
+- [ ] Loading states (VHS tracking animations)
+- [ ] Error states (malfunction aesthetic)
+- [ ] Keyboard shortcuts complete
+- [ ] Settings modal improvements
+- [ ] Auto-save with indicator
+- [ ] Backup system
 
 ## Quick Commands
 

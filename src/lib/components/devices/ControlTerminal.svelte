@@ -9,7 +9,9 @@
   import { projectStore } from '$lib/stores/project';
   import { historyStore } from '$lib/stores/history';
   import { AddMovieCommand, AddActorCommand, DeleteNodeCommand } from '$lib/commands/node-commands';
-  import { EditMovieCommand } from '$lib/commands/edit-command';
+  import { EditMovieCommand, EditActorCommand } from '$lib/commands/edit-command';
+  import { filterStore, isFilterActive } from '$lib/stores/filter';
+  import type { NodeTypeFilter } from '$lib/stores/filter';
   import type { MovieNode, ActorNode } from '$lib/types/node';
   import type { Status } from '$lib/types/node';
   import type { Edge } from '$lib/types/edge';
@@ -201,10 +203,16 @@
       .slice(0, 5);
   }
 
-  // ── Status editing ────────────────────────────────────────────
+  // ── Inspect editing ───────────────────────────────────────────
   const currentMovieNode = $derived(
     $selectionStore?.type === 'movie'
       ? $graphStore.movies.get($selectionStore.id) ?? null
+      : null
+  );
+
+  const currentActorNode = $derived(
+    $selectionStore?.type === 'actor'
+      ? $graphStore.actors.get($selectionStore.id) ?? null
       : null
   );
 
@@ -214,6 +222,35 @@
     const currentNode = $graphStore.movies.get(sel.id);
     if (!currentNode) return;
     historyStore.execute(new EditMovieCommand(sel.id, { status: currentNode.status }, { status }));
+  }
+
+  function setRating(raw: string) {
+    const sel = $selectionStore;
+    if (!sel || sel.type !== 'movie') return;
+    const currentNode = $graphStore.movies.get(sel.id);
+    if (!currentNode) return;
+    const rating = raw === '' ? null : Math.min(10, Math.max(1, parseInt(raw)));
+    if (isNaN(rating as number) && rating !== null) return;
+    historyStore.execute(new EditMovieCommand(sel.id, { my_rating: currentNode.my_rating }, { my_rating: rating }));
+  }
+
+  let notesTimer: ReturnType<typeof setTimeout> | null = null;
+  function onNotesInput(e: Event) {
+    const text = (e.target as HTMLTextAreaElement).value;
+    if (notesTimer) clearTimeout(notesTimer);
+    notesTimer = setTimeout(() => {
+      const sel = $selectionStore;
+      if (!sel) return;
+      if (sel.type === 'movie') {
+        const node = $graphStore.movies.get(sel.id);
+        if (!node) return;
+        historyStore.execute(new EditMovieCommand(sel.id, { notes: node.notes }, { notes: text }));
+      } else {
+        const node = $graphStore.actors.get(sel.id);
+        if (!node) return;
+        historyStore.execute(new EditActorCommand(sel.id, { notes: node.notes }, { notes: text }));
+      }
+    }, 800);
   }
 
   // ── Add / remove graph actions ─────────────────────────────────
@@ -312,7 +349,7 @@
       class="mode-btn"
       class:active={activeMode === 'filter'}
       onclick={() => (activeMode = 'filter')}
-    >FILTER</button>
+    >FILTER{#if $isFilterActive}<span class="filter-dot" aria-label="filters active"></span>{/if}</button>
   </div>
 
   <div class="device-screen">
@@ -478,6 +515,29 @@
                 <option value="dropped">DROPPED</option>
               </select>
             </div>
+            <div class="status-row">
+              <span class="status-key">RATING</span>
+              <input
+                class="rating-input"
+                type="number"
+                min="1"
+                max="10"
+                placeholder="—"
+                value={currentMovieNode.my_rating ?? ''}
+                onchange={(e) => setRating(e.currentTarget.value)}
+              />
+              <span class="rating-max">/10</span>
+            </div>
+            <div class="notes-row">
+              <span class="status-key">NOTES</span>
+              <textarea
+                class="notes-input"
+                placeholder="Add notes..."
+                value={currentMovieNode.notes}
+                oninput={onNotesInput}
+                rows={3}
+              ></textarea>
+            </div>
           {/if}
           {#if inspectedMovie.credits.cast.length > 0}
             <div class="cast-section">
@@ -529,6 +589,19 @@
             <p class="preview-overview">{inspectedPerson.biography}</p>
           {/if}
 
+          {#if currentActorNode}
+            <div class="notes-row">
+              <span class="status-key">NOTES</span>
+              <textarea
+                class="notes-input"
+                placeholder="Add notes..."
+                value={currentActorNode.notes}
+                oninput={onNotesInput}
+                rows={3}
+              ></textarea>
+            </div>
+          {/if}
+
           <!-- Actor suggestions -->
           {#if actorSuggestions.length > 0}
             <div class="suggestions-section">
@@ -570,7 +643,88 @@
     <!-- ── FILTER MODE ── -->
     {:else if activeMode === 'filter'}
       <div class="mode-content">
-        <div class="placeholder-msg">FILTERS</div>
+
+        <div class="filter-group">
+          <div class="filter-label">STATUS</div>
+          <div class="filter-toggles">
+            {#each [['watched','WATCHED'],['watching','WATCHING'],['want_to_watch','QUEUED'],['dropped','DROPPED']] as [val, label]}
+              <button
+                class="toggle-btn"
+                class:active={$filterStore.statuses.has(val as Status)}
+                onclick={() => filterStore.toggleStatus(val as Status)}
+              >{label}</button>
+            {/each}
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <div class="filter-label">RATING</div>
+          <div class="range-row">
+            <input
+              class="range-input"
+              type="number" min="1" max="10" placeholder="MIN"
+              value={$filterStore.minRating || ''}
+              onchange={(e) => filterStore.setRatingRange(parseInt(e.currentTarget.value) || 0, $filterStore.maxRating)}
+            />
+            <span class="range-sep">—</span>
+            <input
+              class="range-input"
+              type="number" min="1" max="10" placeholder="MAX"
+              value={$filterStore.maxRating || ''}
+              onchange={(e) => filterStore.setRatingRange($filterStore.minRating, parseInt(e.currentTarget.value) || 0)}
+            />
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <div class="filter-label">YEAR</div>
+          <div class="range-row">
+            <input
+              class="range-input"
+              type="number" min="1900" placeholder="FROM"
+              value={$filterStore.minYear || ''}
+              onchange={(e) => filterStore.setYearRange(parseInt(e.currentTarget.value) || 0, $filterStore.maxYear)}
+            />
+            <span class="range-sep">—</span>
+            <input
+              class="range-input"
+              type="number" min="1900" placeholder="TO"
+              value={$filterStore.maxYear || ''}
+              onchange={(e) => filterStore.setYearRange($filterStore.minYear, parseInt(e.currentTarget.value) || 0)}
+            />
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <div class="filter-label">SHOW</div>
+          <div class="filter-toggles">
+            {#each [['all','ALL'],['movies','MOVIES'],['actors','ACTORS']] as [val, label]}
+              <button
+                class="toggle-btn"
+                class:active={$filterStore.nodeType === (val as NodeTypeFilter)}
+                onclick={() => filterStore.setNodeType(val as NodeTypeFilter)}
+              >{label}</button>
+            {/each}
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <div class="filter-label">SEARCH</div>
+          <input
+            class="search-input"
+            type="text"
+            placeholder="Title or name..."
+            value={$filterStore.text}
+            oninput={(e) => filterStore.setText(e.currentTarget.value)}
+          />
+        </div>
+
+        <button
+          class="clear-filters-btn"
+          disabled={!$isFilterActive}
+          onclick={() => filterStore.clear()}
+        >CLEAR FILTERS</button>
+
       </div>
     {/if}
 
@@ -1261,6 +1415,164 @@
 .blink {
   animation: blink 1s step-end infinite;
   color: var(--color-text-screen);
+}
+
+/* Filter active dot on tab button */
+.filter-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-led-amber);
+  box-shadow: 0 0 4px var(--color-led-amber);
+  margin-left: 4px;
+  vertical-align: middle;
+  position: relative;
+  top: -1px;
+}
+
+/* Rating input */
+.rating-input {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid #2a2a38;
+  border-radius: 2px;
+  color: var(--color-text-screen);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  outline: none;
+  padding: 3px 6px;
+  width: 48px;
+  flex: none;
+  transition: border-color var(--duration-fast);
+}
+.rating-input:focus { border-color: var(--color-accent-primary); }
+.rating-input::-webkit-inner-spin-button,
+.rating-input::-webkit-outer-spin-button { opacity: 0.4; }
+
+.rating-max {
+  color: var(--color-text-disabled);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+/* Notes */
+.notes-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 4px 0;
+}
+
+.notes-input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid #2a2a38;
+  border-radius: 2px;
+  color: var(--color-text-screen);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.5;
+  outline: none;
+  padding: 5px 7px;
+  resize: vertical;
+  transition: border-color var(--duration-fast);
+}
+.notes-input::placeholder { color: var(--color-text-disabled); }
+.notes-input:focus { border-color: var(--color-accent-primary); }
+
+/* Filter mode */
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.filter-label {
+  color: var(--color-text-disabled);
+  font-family: var(--font-ui);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+}
+
+.filter-toggles {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.toggle-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid #2a2a38;
+  border-radius: 2px;
+  color: var(--color-text-disabled);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  padding: 3px 7px;
+  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
+}
+.toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-secondary);
+}
+.toggle-btn.active {
+  background: rgba(224, 120, 80, 0.15);
+  border-color: rgba(224, 120, 80, 0.5);
+  color: var(--color-accent-primary);
+}
+
+.range-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.range-input {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid #2a2a38;
+  border-radius: 2px;
+  color: var(--color-text-screen);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  outline: none;
+  padding: 3px 5px;
+  width: 56px;
+  transition: border-color var(--duration-fast);
+}
+.range-input:focus { border-color: var(--color-accent-primary); }
+.range-input::-webkit-inner-spin-button,
+.range-input::-webkit-outer-spin-button { opacity: 0.4; }
+
+.range-sep {
+  color: var(--color-text-disabled);
+  font-size: 10px;
+}
+
+.clear-filters-btn {
+  background: transparent;
+  border: 1px solid #2a2a38;
+  border-radius: 2px;
+  color: var(--color-text-disabled);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  padding: 6px;
+  text-align: center;
+  width: 100%;
+  margin-top: 4px;
+  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
+}
+.clear-filters-btn:not(:disabled):hover {
+  background: rgba(255, 80, 80, 0.08);
+  border-color: rgba(255, 80, 80, 0.3);
+  color: #ff8060;
+}
+.clear-filters-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
 }
 
 @media (prefers-reduced-motion: reduce) {

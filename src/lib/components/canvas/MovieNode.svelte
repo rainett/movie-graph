@@ -2,9 +2,12 @@
   import { Handle, Position } from '@xyflow/svelte';
   import type { NodeProps } from '@xyflow/svelte';
   import type { MovieNode } from '$lib/types/node';
+  import { filterStore, isFilterActive, matchesMovie } from '$lib/stores/filter';
 
   type Props = NodeProps & { data: MovieNode };
   let { data, selected }: Props = $props();
+
+  const dimmed = $derived($isFilterActive && !matchesMovie(data, $filterStore));
 
   const statusColors: Record<string, string> = {
     watched: '#50c070',
@@ -25,7 +28,7 @@
 
 <Handle type="target" position={Position.Top} />
 
-<div class="node-card" class:selected>
+<div class="node-card" class:selected class:dimmed>
   <div class="poster-area">
     {#if data.poster}
       <img class="poster" src={data.poster} alt={data.title} />
@@ -69,6 +72,11 @@
 .node-card.selected {
   border-color: var(--color-accent-primary);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 0 2px rgba(224, 120, 80, 0.3);
+}
+
+.node-card.dimmed {
+  opacity: 0.15;
+  transition: opacity 0.2s ease;
 }
 
 .poster-area {

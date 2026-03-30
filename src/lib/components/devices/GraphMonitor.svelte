@@ -8,6 +8,7 @@
   import { selectionStore } from '$lib/stores/selection';
   import { historyStore } from '$lib/stores/history';
   import { MoveNodeCommand } from '$lib/commands/move-command';
+  import { filterStore, isFilterActive, matchesMovie, matchesActor } from '$lib/stores/filter';
   import MovieNodeComponent from '../canvas/MovieNode.svelte';
   import ActorNodeComponent from '../canvas/ActorNode.svelte';
   import HistoryStrip from './HistoryStrip.svelte';
@@ -23,8 +24,20 @@
   // Sync graphStore → flow (graphStore is source of truth for positions)
   $effect(() => {
     const g = $graphStore;
+    const f = $filterStore;
+    const active = $isFilterActive;
 
     untrack(() => {
+      const dimmedIds = new Set<string>();
+      if (active) {
+        for (const m of g.movies.values()) {
+          if (!matchesMovie(m, f)) dimmedIds.add(m.id);
+        }
+        for (const a of g.actors.values()) {
+          if (!matchesActor(a, f)) dimmedIds.add(a.id);
+        }
+      }
+
       flowNodes = [
         ...Array.from(g.movies.values()).map((m) => ({
           id: m.id,
@@ -45,6 +58,7 @@
         source: e.from,
         target: e.to,
         label: edgeLabel(e.relationship),
+        class: dimmedIds.has(e.from) || dimmedIds.has(e.to) ? 'dimmed' : '',
       }));
     });
   });
@@ -353,6 +367,15 @@
 :global(.svelte-flow__edge-textbg) {
   fill: #0a0e14;
   opacity: 0.85;
+}
+
+:global(.svelte-flow__edge.dimmed .svelte-flow__edge-path) {
+  opacity: 0.08;
+  transition: opacity 0.2s ease;
+}
+
+:global(.svelte-flow__edge.dimmed .svelte-flow__edge-textwrapper) {
+  opacity: 0;
 }
 
 :global(.svelte-flow__handle) {
